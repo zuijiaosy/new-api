@@ -12,3 +12,6 @@ one-api
 .DS_Store
 tiktoken_cache
 .eslintcache
+.history
+node_modules
+.claude

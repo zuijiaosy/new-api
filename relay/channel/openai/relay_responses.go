@@ -115,7 +115,32 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 				if streamResponse.Item != nil {
 					switch streamResponse.Item.Type {
 					case dto.BuildInCallWebSearchCall:
-						info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview].CallCount++
+						// 完整的 nil 安全检查
+						if info == nil {
+							logger.LogWarn(c.Request.Context(), "info is nil when processing web_search_call")
+							break
+						}
+						if info.ResponsesUsageInfo == nil {
+							logger.LogWarn(c.Request.Context(), "ResponsesUsageInfo is nil when processing web_search_call")
+							break
+						}
+						if info.ResponsesUsageInfo.BuiltInTools == nil {
+							logger.LogWarn(c.Request.Context(), "BuiltInTools is nil when processing web_search_call, initializing map")
+							info.ResponsesUsageInfo.BuiltInTools = make(map[string]*relaycommon.BuildInToolInfo)
+						}
+
+						// 动态创建工具统计条目
+						toolInfo, ok := info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]
+						if !ok || toolInfo == nil {
+							logger.LogInfo(c.Request.Context(), "web_search_preview tool not found in request, creating new entry")
+							info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview] = &relaycommon.BuildInToolInfo{
+								ToolName:  dto.BuildInToolWebSearchPreview,
+								CallCount: 0,
+							}
+							toolInfo = info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]
+						}
+						toolInfo.CallCount++
+						logger.LogDebug(c.Request.Context(), fmt.Sprintf("web_search_call detected, total count: %d", toolInfo.CallCount))
 					}
 				}
 			}
