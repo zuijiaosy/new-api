@@ -18,6 +18,13 @@ var defNext = func(c *gin.Context) {
 }
 
 func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
+	clientIP := c.ClientIP()
+	for _, ip := range common.RateLimitWhitelistIPs {
+		if clientIP == ip {
+			return
+		}
+	}
+
 	ctx := context.Background()
 	rdb := common.RDB
 	key := "rateLimit:" + mark + c.ClientIP()
@@ -64,7 +71,14 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 }
 
 func memoryRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
-	key := mark + c.ClientIP()
+	clientIP := c.ClientIP()
+	for _, ip := range common.RateLimitWhitelistIPs {
+		if clientIP == ip {
+			return
+		}
+	}
+
+	key := mark + clientIP
 	if !inMemoryRateLimiter.Request(key, maxRequestNum, duration) {
 		c.Status(http.StatusTooManyRequests)
 		c.Abort()

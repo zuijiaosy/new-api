@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -96,6 +97,18 @@ func InitEnv() {
 	GlobalWebRateLimitEnable = GetEnvOrDefaultBool("GLOBAL_WEB_RATE_LIMIT_ENABLE", true)
 	GlobalWebRateLimitNum = GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", 60)
 	GlobalWebRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT_DURATION", 180))
+
+	whitelistIPs := os.Getenv("RATE_LIMIT_WHITELIST_IPS")
+	if whitelistIPs != "" {
+		ips := strings.Split(whitelistIPs, ",")
+		RateLimitWhitelistIPs = make([]string, 0, len(ips))
+		for _, ip := range ips {
+			trimmedIP := strings.TrimSpace(ip)
+			if trimmedIP != "" {
+				RateLimitWhitelistIPs = append(RateLimitWhitelistIPs, trimmedIP)
+			}
+		}
+	}
 
 	initConstantEnv()
 }

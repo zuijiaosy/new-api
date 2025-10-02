@@ -166,6 +166,8 @@ var (
 
 	CriticalRateLimitNum            = 20
 	CriticalRateLimitDuration int64 = 20 * 60
+
+	RateLimitWhitelistIPs []string
 )
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute

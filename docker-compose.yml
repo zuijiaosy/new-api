@@ -21,7 +21,7 @@ services:
     #      - NODE_TYPE=slave  # Uncomment for slave node in multi-node deployment
     #      - SYNC_FREQUENCY=60  # Uncomment if regular database syncing is needed
     #      - FRONTEND_BASE_URL=https://openai.justsong.cn  # Uncomment for multi-node deployment with front-end URL
-
+      - RATE_LIMIT_WHITELIST_IPS=127.0.0.1,::1  # 免流控IP列表，多个用逗号分隔
     depends_on:
       - redis
       - mysql
