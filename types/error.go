@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"one-api/common"
 	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 type OpenAIError struct {
@@ -61,6 +62,9 @@ const (
 	ErrorCodeConvertRequestFailed  ErrorCode = "convert_request_failed"
 	ErrorCodeAccessDenied          ErrorCode = "access_denied"
 
+	// request error
+	ErrorCodeBadRequestBody ErrorCode = "bad_request_body"
+
 	// response error
 	ErrorCodeReadResponseBodyFailed ErrorCode = "read_response_body_failed"
 	ErrorCodeBadResponseStatusCode  ErrorCode = "bad_response_status_code"
@@ -88,6 +92,14 @@ type NewAPIError struct {
 	errorType      ErrorType
 	errorCode      ErrorCode
 	StatusCode     int
+}
+
+// Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
+func (e *NewAPIError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 func (e *NewAPIError) GetErrorCode() ErrorCode {
@@ -160,6 +172,9 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if e.errorCode != ErrorCodeCountTokenFailed {
 		result.Message = common.MaskSensitiveInfo(result.Message)
 	}
+	if result.Message == "" {
+		result.Message = string(e.errorType)
+	}
 	return result
 }
 
@@ -185,6 +200,9 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 	}
 	if e.errorCode != ErrorCodeCountTokenFailed {
 		result.Message = common.MaskSensitiveInfo(result.Message)
+	}
+	if result.Message == "" {
+		result.Message = string(e.errorType)
 	}
 	return result
 }
