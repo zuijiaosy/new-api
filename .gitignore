@@ -25,3 +25,4 @@ electron/dist
 web/bun.lock
 
 data/
+.pprof
