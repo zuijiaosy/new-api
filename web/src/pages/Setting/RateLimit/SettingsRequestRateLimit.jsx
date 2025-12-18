@@ -39,6 +39,7 @@ export default function RequestRateLimit(props) {
     ModelRequestRateLimitSuccessCount: 1000,
     ModelRequestRateLimitDurationMinutes: 1,
     ModelRequestRateLimitGroup: '',
+    CodexClientRestrictionEnabled: false,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -232,6 +233,31 @@ export default function RequestRateLimit(props) {
             <Row>
               <Button size='default' onClick={onSubmit}>
                 {t('保存模型速率限制')}
+              </Button>
+            </Row>
+          </Form.Section>
+          <Form.Section text={t('Codex 客户端限制')}>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'CodexClientRestrictionEnabled'}
+                  label={t('启用 Codex 客户端限制')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  extraText={t('启用后，只有来自 Codex 客户端的请求才能访问 API')}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      CodexClientRestrictionEnabled: value,
+                    });
+                  }}
+                />
+              </Col>
+            </Row>
+            <Row>
+              <Button size='default' onClick={onSubmit}>
+                {t('保存 Codex 限制')}
               </Button>
             </Row>
           </Form.Section>
