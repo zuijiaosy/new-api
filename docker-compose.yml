@@ -1,84 +1,90 @@
-# New-API Docker Compose Configuration
-# 
-# Quick Start:
-#   1. docker-compose up -d
-#   2. Access at http://localhost:3000
-#
-# Using MySQL instead of PostgreSQL:
-#   1. Comment out the postgres service and SQL_DSN line 15
-#   2. Uncomment the mysql service and SQL_DSN line 16
-#   3. Uncomment mysql in depends_on (line 28)
-#   4. Uncomment mysql_data in volumes section (line 64)
-#
-# ⚠️  IMPORTANT: Change all default passwords before deploying to production!
-
-version: '3.4' # For compatibility with older Docker versions
+version: '3.4'
 
 services:
-  new-api:
-    image: calciumion/new-api:latest
-    container_name: new-api
+  codex-new-api:
+    image: q1285514609/new-api:latest
+    container_name: codex-new-api
     restart: always
     command: --log-dir /app/logs
     ports:
-      - "3000:3000"
+      - "9706:3000"
     volumes:
       - ./data:/data
       - ./logs:/app/logs
     environment:
-      - SQL_DSN=postgresql://root:123456@postgres:5432/new-api # ⚠️ IMPORTANT: Change the password in production!
-#      - SQL_DSN=root:123456@tcp(mysql:3306)/new-api  # Point to the mysql service, uncomment if using MySQL
-      - REDIS_CONN_STRING=redis://redis
+      - SQL_DSN=root:Qq1285514609.@tcp(codex-mysql:3306)/new-api  # 修复：使用正确的服务名
+      - REDIS_CONN_STRING=redis://codex-redis:6379  # 修复：指定完整的 Redis 连接
       - TZ=Asia/Shanghai
-      - ERROR_LOG_ENABLED=true # 是否启用错误日志记录 (Whether to enable error log recording)
-      - BATCH_UPDATE_ENABLED=true  # 是否启用批量更新 (Whether to enable batch update)
-#      - STREAMING_TIMEOUT=300  # 流模式无响应超时时间，单位秒，默认120秒，如果出现空补全可以尝试改为更大值 （Streaming timeout in seconds, default is 120s. Increase if experiencing empty completions）
-#      - SESSION_SECRET=random_string  # 多机部署时设置，必须修改这个随机字符串！！ （multi-node deployment, set this to a random string!!!!!!!）
-#      - SYNC_FREQUENCY=60  # Uncomment if regular database syncing is needed
-      - RATE_LIMIT_WHITELIST_IPS=127.0.0.1,::1  # 免流控IP列表，多个用逗号分隔
-#      - GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX  # Google Analytics 的测量 ID (Google Analytics Measurement ID)
-#      - UMAMI_WEBSITE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # Umami 网站 ID (Umami Website ID)
-#      - UMAMI_SCRIPT_URL=https://analytics.umami.is/script.js  # Umami 脚本 URL，默认为官方地址 (Umami Script URL, defaults to official URL)
+      - GLOBAL_API_RATE_LIMIT_ENABLE=true
+      # ip白名单，这里的 ip 调用接口不会限制使用速率，主要针对官方定时任务处理 token
+      - RATE_LIMIT_WHITELIST_IPS=127.0.0.1,8.211.171.4
+    # 严格限制日志大小
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    #      - STREAMING_TIMEOUT=300  # 流模式无响应超时时间，单位秒，默认120秒，如果出现空补全可以尝试改为更大值
+    #      - SESSION_SECRET=random_string  # 多机部署时设置，必须修改这个随机字符串！！！！！！！
+    #      - NODE_TYPE=slave  # Uncomment for slave node in multi-node deployment
+    #      - SYNC_FREQUENCY=60  # Uncomment if regular database syncing is needed
+    #      - FRONTEND_BASE_URL=https://openai.justsong.cn  # Uncomment for multi-node deployment with front-end URL
+
     depends_on:
-      - redis
-      - postgres
-#      - mysql  # Uncomment if using MySQL
+      - codex-redis
+      - codex-mysql
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' | awk -F: '{print $$2}'"]
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - codex-new-api
 
-  redis:
+  codex-redis:
     image: redis:latest
-    container_name: redis
+    container_name: codex-redis
     restart: always
+    networks:  # 添加：Redis 需要加入网络
+      - codex-new-api
 
-  postgres:
-    image: postgres:15
-    container_name: postgres
+  codex-mysql:
+    image: mysql:8.2
+    container_name: codex-mysql
     restart: always
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: 123456  # ⚠️ IMPORTANT: Change this password in production!
-      POSTGRES_DB: new-api
+      MYSQL_ROOT_PASSWORD: Qq1285514609.  # Ensure this matches the password in SQL_DSN
+      MYSQL_DATABASE: new-api
+    command: --binlog-expire-logs-seconds=604800
     volumes:
-      - pg_data:/var/lib/postgresql/data
-#    ports:
-#      - "5432:5432"  # Uncomment if you need to access PostgreSQL from outside Docker
+      - ./mysql_data:/var/lib/mysql
+    networks:  # 添加：MySQL 需要加入网络
+      - codex-new-api
+    ports:
+      - "32060:3306"  # If you want to access MySQL from outside Docker, uncomment
 
-#  mysql:
-#    image: mysql:8.2
-#    container_name: mysql
-#    restart: always
-#    environment:
-#      MYSQL_ROOT_PASSWORD: 123456  # ⚠️ IMPORTANT: Change this password in production!
-#      MYSQL_DATABASE: new-api
-#    volumes:
-#      - mysql_data:/var/lib/mysql
-#    ports:
-#      - "3306:3306"  # Uncomment if you need to access MySQL from outside Docker
+  # Nginx 反向代理服务
+  # nginx:
+  #   image: nginx:latest
+  #   container_name: nginx
+  #   restart: always
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - /home/nginx/nginx.conf:/etc/nginx/nginx.conf
+  #     - /home/nginx/html:/usr/share/nginx/html
+  #     - /home/nginx/log:/var/log/nginx
+  #     - /home/nginx/ssl:/etc/nginx/ssl
+  #   networks:
+  #     - codex-new-api
+  #   depends_on:
+  #     - codex-new-api
 
-volumes:
-  pg_data:
-#  mysql_data:
+# volumes:
+#   codex-mysql_data:
+
+networks:
+  codex-new-api:
+    name: codex-new-api
+    driver: bridge

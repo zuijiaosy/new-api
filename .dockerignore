@@ -1,9 +1,34 @@
-.github
+# Version control
 .git
+.github
+
+# Documentation
 *.md
-.vscode
-.gitignore
-Makefile
 docs
+
+# IDE and editor files
+.vscode
+.idea
+.DS_Store
+
+# Build artifacts and caches
+web/node_modules
+web/dist
+web/.next
+web/build
 .eslintcache
 .gocache
+*.log
+logs
+
+# Configuration files not needed in Docker
+.gitignore
+Makefile
+.env
+.env.*
+
+# Profiling data
+pprof
+
+# Other
+.history

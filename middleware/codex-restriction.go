@@ -31,7 +31,7 @@ func CodexClientRestriction() gin.HandlerFunc {
 
 		// 验证是否为有效的 Codex 客户端
 		if !isValidCodexClient(c) {
-			abortWithOpenAiMessage(c, http.StatusForbidden, "Request interrupted by user")
+			abortWithOpenAiMessage(c, http.StatusForbidden, "Please use in Codex. Third-party clients are not supported")
 			return
 		}
 

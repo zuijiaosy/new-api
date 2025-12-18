@@ -26,3 +26,4 @@ web/bun.lock
 
 data/
 .pprof
+mysql_data

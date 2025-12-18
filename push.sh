@@ -8,7 +8,7 @@ APP_NAME="new-api"
 VERSION=$(date +%Y%m%d-%H%M%S)
 
 echo "🔨 构建镜像..."
-docker build --no-cache -t $USERNAME/$APP_NAME:latest -f Dockerfile ..
+docker build --no-cache -t $USERNAME/$APP_NAME:latest -f Dockerfile .
 docker tag $USERNAME/$APP_NAME:latest $USERNAME/$APP_NAME:$VERSION
 
 echo "📤 推送到 Docker Hub..."
