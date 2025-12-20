@@ -33,6 +33,7 @@ const RateLimitSetting = () => {
     ModelRequestRateLimitDurationMinutes: 1,
     ModelRequestRateLimitGroup: '',
     CodexClientRestrictionEnabled: false,
+    CodexClientRestrictionTrustedIPWhitelist: '',
   });
 
   let [loading, setLoading] = useState(false);

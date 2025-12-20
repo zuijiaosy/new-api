@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/gin-gonic/gin"
 )
@@ -29,8 +31,15 @@ func CodexClientRestriction() gin.HandlerFunc {
 			return
 		}
 
+		// 命中可信任 IP 白名单：跳过客户端校验
+		if setting.IsCodexClientRestrictionTrustedIP(c.ClientIP()) {
+			c.Next()
+			return
+		}
+
 		// 验证是否为有效的 Codex 客户端
 		if !isValidCodexClient(c) {
+			logger.LogWarn(c.Request.Context(), fmt.Sprintf("Codex 客户端限制：拒绝请求，user=%d ip=%s ua=%q path=%s", c.GetInt("id"), c.ClientIP(), c.GetHeader("User-Agent"), c.Request.URL.Path))
 			abortWithOpenAiMessage(c, http.StatusForbidden, "Please use in Codex. Third-party clients are not supported")
 			return
 		}

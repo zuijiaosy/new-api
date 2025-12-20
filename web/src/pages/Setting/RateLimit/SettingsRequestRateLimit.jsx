@@ -40,6 +40,7 @@ export default function RequestRateLimit(props) {
     ModelRequestRateLimitDurationMinutes: 1,
     ModelRequestRateLimitGroup: '',
     CodexClientRestrictionEnabled: false,
+    CodexClientRestrictionTrustedIPWhitelist: '',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -250,6 +251,39 @@ export default function RequestRateLimit(props) {
                     setInputs({
                       ...inputs,
                       CodexClientRestrictionEnabled: value,
+                    });
+                  }}
+                />
+              </Col>
+            </Row>
+            <Row>
+              <Col xs={24} sm={16}>
+                <Form.TextArea
+                  label={t('可信任请求 IP 白名单')}
+                  placeholder={t('示例：\\n1.2.3.4\\n10.0.0.0/8')}
+                  field={'CodexClientRestrictionTrustedIPWhitelist'}
+                  autosize={{ minRows: 3, maxRows: 10 }}
+                  extraText={
+                    <div>
+                      <p>{t('说明：')}</p>
+                      <ul>
+                        <li>
+                          {t(
+                            '支持单个 IP 与 CIDR（如 1.2.3.4、10.0.0.0/8、2001:db8::/32）。',
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            '可使用换行/空格/逗号/分号分隔，命中后将跳过 Codex 客户端验证。',
+                          )}
+                        </li>
+                      </ul>
+                    </div>
+                  }
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      CodexClientRestrictionTrustedIPWhitelist: value,
                     });
                   }}
                 />
