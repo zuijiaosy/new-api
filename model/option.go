@@ -147,6 +147,12 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
 
+	// 额度重置相关配置
+	common.OptionMap["QuotaResetEnabled"] = "false"
+	common.OptionMap["QuotaResetTime"] = "00:01"
+	common.OptionMap["QuotaResetConcurrency"] = "3"
+	common.OptionMap["WeeklyQuotaLimitEnabled"] = "false" // 周额度限制开关，默认关闭
+
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
 	for k, v := range modelConfigs {

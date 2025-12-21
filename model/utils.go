@@ -39,6 +39,12 @@ func InitBatchUpdater() {
 	})
 }
 
+// BatchUpdateNow 立即执行一次批量落库（仅在 BatchUpdateEnabled=true 时有意义）。
+// 用途：在某些需要“先把历史增量落库，再做强制写入”的场景（例如额度重置）避免数据不一致。
+func BatchUpdateNow() {
+	batchUpdate()
+}
+
 func addNewRecord(type_ int, id int, value int) {
 	batchUpdateLocks[type_].Lock()
 	defer batchUpdateLocks[type_].Unlock()

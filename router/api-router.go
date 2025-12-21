@@ -256,5 +256,14 @@ func SetApiRouter(router *gin.Engine) {
 			modelsRoute.PUT("/", controller.UpdateModelMeta)
 			modelsRoute.DELETE("/:id", controller.DeleteModelMeta)
 		}
+
+		// 额度重置管理接口
+		quotaResetRoute := apiRouter.Group("/quota-reset")
+		quotaResetRoute.Use(middleware.RootAuth())
+		{
+			quotaResetRoute.GET("/logs", controller.GetQuotaResetLogs)
+			quotaResetRoute.GET("/status", controller.GetQuotaResetStatus)
+			quotaResetRoute.POST("/trigger", controller.TriggerQuotaReset)
+		}
 	}
 }

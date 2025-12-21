@@ -84,3 +84,4 @@ New API is a next-generation large model gateway and AI asset management system 
 - 代码中的注释全部使用中文
 - 我是 java 开发者转 go 的，尽量使用 java 开发工程师能够看懂的代码语法修改或者新增代
 - 编写的测试go 代码测试完成后需要删除
+- 我们自己修改或者新增功能尽量不影响原来的代码，方便我后续更新合并开源项目中的代码

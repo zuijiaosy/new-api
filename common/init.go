@@ -148,6 +148,9 @@ func initConstantEnv() {
 	// 任务轮询时查询的最大数量
 	constant.TaskQueryLimit = GetEnvOrDefault("TASK_QUERY_LIMIT", 1000)
 
+	// codexzh 数据库连接（用于额度重置功能）
+	CodexzhSqlDSN = os.Getenv("CODEXZH_SQL_DSN")
+
 	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
 	if soraPatchStr != "" {
 		var taskPricePatches []string

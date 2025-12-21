@@ -124,6 +124,9 @@ var RelayTimeout int // unit is second
 var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int
 
+// codexzh 数据库连接字符串（用于额度重置功能）
+var CodexzhSqlDSN string
+
 var GeminiSafetySetting string
 
 // https://docs.cohere.com/docs/safety-modes Type; NONE/CONTEXTUAL/STRICT
