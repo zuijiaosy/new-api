@@ -132,6 +132,11 @@ var GeminiSafetySetting string
 // https://docs.cohere.com/docs/safety-modes Type; NONE/CONTEXTUAL/STRICT
 var CohereSafetySetting string
 
+// ResponseContentReplacements 响应内容替换配置
+// key 为要替换的内容，value 为替换后的内容
+// 用于隐藏上游渠道名称等敏感信息
+var ResponseContentReplacements map[string]string
+
 const (
 	RequestIdKey = "X-Oneapi-Request-Id"
 )

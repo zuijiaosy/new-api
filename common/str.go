@@ -237,3 +237,16 @@ func MaskSensitiveInfo(str string) string {
 
 	return str
 }
+
+// ReplaceResponseContent 替换响应内容中的敏感信息
+// 根据配置的 key-value 对，将响应内容中的 key 替换为 value
+// 用于隐藏上游渠道名称等敏感信息
+func ReplaceResponseContent(content string) string {
+	if len(ResponseContentReplacements) == 0 {
+		return content
+	}
+	for key, value := range ResponseContentReplacements {
+		content = strings.ReplaceAll(content, key, value)
+	}
+	return content
+}

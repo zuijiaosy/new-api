@@ -87,6 +87,9 @@ func StringData(c *gin.Context, str string) error {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}
 
+	// 替换响应内容中的敏感信息
+	str = common.ReplaceResponseContent(str)
+
 	c.Render(-1, common.CustomEvent{Data: "data: " + str})
 	return FlushWriter(c)
 }

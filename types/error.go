@@ -145,15 +145,6 @@ func (e *NewAPIError) SetMessage(message string) {
 	e.Err = errors.New(message)
 }
 
-// normalizeErrorType 规范化错误类型名称
-// 将上游渠道的特定错误类型替换为标准类型
-func normalizeErrorType(errorType string) string {
-	if strings.HasPrefix(errorType, "packy_api") {
-		return strings.Replace(errorType, "packy_api", "new_api", 1)
-	}
-	return errorType
-}
-
 func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	var result OpenAIError
 	switch e.errorType {
@@ -184,8 +175,9 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
-	// 规范化错误类型
-	result.Type = normalizeErrorType(result.Type)
+	// 替换响应内容中的敏感信息
+	result.Type = common.ReplaceResponseContent(result.Type)
+	result.Message = common.ReplaceResponseContent(result.Message)
 	return result
 }
 
@@ -215,8 +207,9 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
-	// 规范化错误类型
-	result.Type = normalizeErrorType(result.Type)
+	// 替换响应内容中的敏感信息
+	result.Type = common.ReplaceResponseContent(result.Type)
+	result.Message = common.ReplaceResponseContent(result.Message)
 	return result
 }
 

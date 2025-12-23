@@ -27,6 +27,9 @@ func IOCopyBytesGracefully(c *gin.Context, src *http.Response, data []byte) {
 		return
 	}
 
+	// 替换响应内容中的敏感信息
+	data = []byte(common.ReplaceResponseContent(string(data)))
+
 	body := io.NopCloser(bytes.NewBuffer(data))
 
 	// We shouldn't set the header before we parse the response body, because the parse part may fail.

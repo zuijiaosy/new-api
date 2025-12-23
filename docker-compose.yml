@@ -18,6 +18,7 @@ services:
       - GLOBAL_API_RATE_LIMIT_ENABLE=true
       # ip白名单，这里的 ip 调用接口不会限制使用速率，主要针对官方定时任务处理 token
       - RATE_LIMIT_WHITELIST_IPS=127.0.0.1,8.211.171.4
+      - RESPONSE_CONTENT_REPLACEMENTS=packy_api:new_api,cc-azu-sale:cc
     # 严格限制日志大小
     logging:
       driver: "json-file"

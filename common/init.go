@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -162,5 +163,41 @@ func initConstantEnv() {
 			}
 		}
 		constant.TaskPricePatches = taskPricePatches
+	}
+
+	// 解析响应内容替换配置
+	// 支持两种格式：
+	// 1. JSON 格式: {"key1":"value1","key2":"value2"}
+	// 2. 简单格式: key1:value1,key2:value2
+	responseReplacementsStr := os.Getenv("RESPONSE_CONTENT_REPLACEMENTS")
+	if responseReplacementsStr != "" {
+		ResponseContentReplacements = make(map[string]string)
+		// 尝试 JSON 解析
+		if strings.HasPrefix(responseReplacementsStr, "{") {
+			if err := json.Unmarshal([]byte(responseReplacementsStr), &ResponseContentReplacements); err != nil {
+				log.Printf("WARNING: Failed to parse RESPONSE_CONTENT_REPLACEMENTS as JSON: %v", err)
+				ResponseContentReplacements = nil
+			}
+		} else {
+			// 简单格式解析: key1:value1,key2:value2
+			pairs := strings.Split(responseReplacementsStr, ",")
+			for _, pair := range pairs {
+				pair = strings.TrimSpace(pair)
+				if pair == "" {
+					continue
+				}
+				parts := strings.SplitN(pair, ":", 2)
+				if len(parts) == 2 {
+					key := strings.TrimSpace(parts[0])
+					value := strings.TrimSpace(parts[1])
+					if key != "" {
+						ResponseContentReplacements[key] = value
+					}
+				}
+			}
+		}
+		if len(ResponseContentReplacements) > 0 {
+			log.Printf("Loaded %d response content replacement rules", len(ResponseContentReplacements))
+		}
 	}
 }
