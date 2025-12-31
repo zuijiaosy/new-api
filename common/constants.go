@@ -70,6 +70,8 @@ var EmailLoginAuthServerList = []string{
 
 var DebugEnabled bool
 var MemoryCacheEnabled bool
+var RequestLogEnabled bool
+var InfoLogEnabled = true // 控制 INFO 级别日志是否输出，默认开启
 
 var LogConsumeEnabled = true
 

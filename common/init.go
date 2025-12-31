@@ -81,6 +81,8 @@ func InitEnv() {
 	// Initialize variables from constants.go that were using environment variables
 	DebugEnabled = os.Getenv("DEBUG") == "true"
 	MemoryCacheEnabled = os.Getenv("MEMORY_CACHE_ENABLED") == "true"
+	RequestLogEnabled = os.Getenv("REQUEST_LOG_ENABLED") == "false"
+	InfoLogEnabled = os.Getenv("INFO_LOG_ENABLED") != "false" // 默认开启，设置为 false 才关闭
 	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
 
 	// Parse requestInterval and set RequestInterval

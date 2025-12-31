@@ -55,7 +55,9 @@ func SetupLogger() {
 }
 
 func LogInfo(ctx context.Context, msg string) {
-	logHelper(ctx, loggerINFO, msg)
+	if common.InfoLogEnabled {
+		logHelper(ctx, loggerINFO, msg)
+	}
 }
 
 func LogWarn(ctx context.Context, msg string) {
