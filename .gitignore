@@ -21,11 +21,15 @@ node_modules
 electron/node_modules
 electron/dist
 .gocache
+.gomodcache/
 .cache
 web/bun.lock
+plans
 
 data/
 .pprof
 pprof/
 *.pprof
 mysql_data
+.gocache-temp
+.gopath
