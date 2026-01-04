@@ -329,9 +329,6 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		}
 		return true
 	}
-	if openaiErr.StatusCode == http.StatusBadRequest {
-		return false
-	}
 	if openaiErr.StatusCode == 408 {
 		// azure处理超时不重试
 		return false
@@ -540,9 +537,6 @@ func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError,
 			return false
 		}
 		return true
-	}
-	if taskErr.StatusCode == http.StatusBadRequest {
-		return false
 	}
 	if taskErr.StatusCode == 408 {
 		// azure处理超时不重试
