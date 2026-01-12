@@ -52,7 +52,13 @@ func CodexClientRestriction() gin.HandlerFunc {
 func isValidCodexClient(c *gin.Context) bool {
 	userAgent := c.GetHeader("User-Agent")
 
-	// 1. 检查 User-Agent 前缀并提取版本号
+	// 1. 检查是否为 opencode 客户端
+	// opencode 客户端特征: User-Agent 中包含 ai-sdk/openai/*, ai-sdk/provider-utils/*, runtime/bun/*
+	if isOpenCodeClient(userAgent) {
+		return true
+	}
+
+	// 2. 检查 User-Agent 前缀并提取版本号
 	var version string
 	for _, prefix := range codexUserAgentPrefixes {
 		if strings.HasPrefix(userAgent, prefix) {
@@ -68,12 +74,12 @@ func isValidCodexClient(c *gin.Context) bool {
 		return false
 	}
 
-	// 2. 验证版本号格式
+	// 3. 验证版本号格式
 	if !isValidVersionFormat(version) {
 		return false
 	}
 
-	// 3. 检查必需的头部
+	// 4. 检查必需的头部
 	conversationId := c.GetHeader("conversation_id")
 	sessionId := c.GetHeader("session_id")
 
@@ -82,6 +88,17 @@ func isValidCodexClient(c *gin.Context) bool {
 	}
 
 	return true
+}
+
+// isOpenCodeClient 检查是否为 opencode 客户端
+// opencode 客户端的 User-Agent 格式: ai-sdk/openai/版本 ai-sdk/provider-utils/版本 runtime/bun/版本
+func isOpenCodeClient(userAgent string) bool {
+	// 检查是否包含这三个特征字符串
+	hasOpenAI := strings.Contains(userAgent, "ai-sdk/openai/")
+	hasProviderUtils := strings.Contains(userAgent, "ai-sdk/provider-utils/")
+	hasRuntimeBun := strings.Contains(userAgent, "runtime/bun/")
+
+	return hasOpenAI && hasProviderUtils && hasRuntimeBun
 }
 
 // isValidVersionFormat 验证版本号格式是否符合 SemVer
