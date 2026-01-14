@@ -79,11 +79,10 @@ func isValidCodexClient(c *gin.Context) bool {
 		return false
 	}
 
-	// 4. 检查必需的头部
-	conversationId := c.GetHeader("conversation_id")
+	// 4. 检查必需的头部（session_id 必须存在，conversation_id 可选）
 	sessionId := c.GetHeader("session_id")
 
-	if conversationId == "" || sessionId == "" {
+	if sessionId == "" {
 		return false
 	}
 
