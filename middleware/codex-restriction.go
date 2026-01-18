@@ -90,10 +90,10 @@ func isValidCodexClient(c *gin.Context) bool {
 }
 
 // isOpenCodeClient 检查是否为 opencode 客户端
-// opencode 客户端的 User-Agent 格式: ai-sdk/openai/版本 ai-sdk/provider-utils/版本 runtime/bun/版本
+
 func isOpenCodeClient(userAgent string) bool {
-	// 检查是否包含这三个特征字符串
-	hasOpenAI := strings.Contains(userAgent, "ai-sdk/openai/")
+	// 检查是否为 opencode 客户端（新版或旧版）
+	hasOpenAI := strings.HasPrefix(userAgent, "opencode/") || strings.Contains(userAgent, "ai-sdk/openai/")
 	hasProviderUtils := strings.Contains(userAgent, "ai-sdk/provider-utils/")
 	hasRuntimeBun := strings.Contains(userAgent, "runtime/bun/")
 
