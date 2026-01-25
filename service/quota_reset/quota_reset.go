@@ -338,7 +338,7 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 	}
 
 	// 查询本周实际使用量（通过 token_name = email），每天上限为 dailyQuota
-	weeklyUsed := getWeeklyUsedQuota(user.Email, dailyQuota)
+	weeklyUsed := getWeeklyUsedQuota(user)
 	weeklyRemain := *user.WeeklyQuota - weeklyUsed
 
 	// 周额度已用尽
@@ -354,50 +354,105 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 }
 
 // getWeeklyUsedQuota 查询用户本周计入周额度的已用额度
-// 规则：每天消耗最多计入 dailyQuota，超出部分视为加油包消耗，不计入周额度
-// 通过 token_name = email 关联
-func getWeeklyUsedQuota(email string, dailyQuota int64) int64 {
+//
+// 规则说明:
+// 1. 统计起点: 取 max(本周一 00:00, 用户续费日期 00:00)
+//   - subscriptionStart 为 NULL: 从本周一开始统计
+//   - subscriptionStart 在本周一之前: 从本周一开始统计
+//   - subscriptionStart 在本周一之后: 从 subscriptionStart 所在天的 00:00 开始统计
+//
+// 2. 每天消耗最多计入 dailyQuota，超出部分视为加油包消耗，不计入周额度
+// 3. 所有时间计算使用北京时间(UTC+8)，确保时区一致性
+//
+// 参数:
+//
+//	user: 用户对象，包含 Email、SubscriptionStart、DailyQuota
+//
+// 返回:
+//
+//	本周(或续费后)已使用的周额度总量
+func getWeeklyUsedQuota(user *CodexzhUser) int64 {
 	now := time.Now().In(beijingLocation)
+
+	// 1. 计算本周一的开始时间（北京时间 00:00:00）
 	weekday := now.Weekday()
 	if weekday == time.Sunday {
 		weekday = 7
 	}
 	daysToMonday := int(weekday) - 1
 
-	var weeklyUsed int64 = 0
+	mondayStart := now.AddDate(0, 0, -daysToMonday)
+	mondayStart = time.Date(
+		mondayStart.Year(), mondayStart.Month(), mondayStart.Day(),
+		0, 0, 0, 0, beijingLocation,
+	)
 
-	// 遍历本周已过的每一天（周一到今天）
-	for i := 0; i <= daysToMonday; i++ {
-		// 计算当天的开始和结束时间
-		day := now.AddDate(0, 0, -daysToMonday+i)
-		dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, beijingLocation)
+	// 2. 确定统计起点：取 max(本周一, subscriptionStart所在天的00:00)
+	considerStart := mondayStart
+
+	if user.SubscriptionStart != nil {
+		// 将 subscriptionStart 转换为北京时间
+		subStart := user.SubscriptionStart.In(beijingLocation)
+
+		// 如果续费时间在本周一之后，从续费当天的00:00开始统计
+		if subStart.After(mondayStart) {
+			// 规范化到续费当天的00:00:00
+			considerStart = time.Date(
+				subStart.Year(), subStart.Month(), subStart.Day(),
+				0, 0, 0, 0, beijingLocation,
+			)
+		}
+	}
+
+	// 3. 从 considerStart 到 now 逐天统计消耗
+	var weeklyUsed int64 = 0
+	currentDay := considerStart
+
+	// 注意：当 now 恰好是 00:00:00 时，需要把该秒的消费也统计进去（避免漏算）。
+	for !currentDay.After(now) {
+		dayStart := currentDay
 		dayEnd := dayStart.Add(24 * time.Hour)
 
-		// 如果是今天，结束时间用当前时间
-		if i == daysToMonday {
+		isPartialDay := false
+		// 如果结束时间超过now，用now作为结束时间
+		if dayEnd.After(now) {
 			dayEnd = now
+			isPartialDay = true
+		}
+
+		// 注意：SumUsedQuota 内部使用 created_at <= endTimestamp（右闭区间）。
+		// 为避免跨天 00:00:00 的消费记录被前后两天重复统计：
+		// - 整天统计时，使用 [dayStart, dayEnd) 的语义，通过 endUnix-1 实现；
+		// - 当天（不完整的一天）统计时，允许统计到 now（包含当前秒）。
+		startUnix := dayStart.Unix()
+		endUnix := dayEnd.Unix()
+		if !isPartialDay {
+			endUnix = endUnix - 1
 		}
 
 		// 查询当天消耗
 		stat := model.SumUsedQuota(
 			model.LogTypeConsume,
-			dayStart.Unix(),
-			dayEnd.Unix(),
-			"",    // modelName
-			"",    // username
-			email, // tokenName = email
-			0,     // channel
-			"",    // group
+			startUnix,
+			endUnix,
+			"",         // modelName
+			"",         // username
+			user.Email, // tokenName = email
+			0,          // channel
+			"",         // group
 		)
 
 		dayUsed := int64(stat.Quota)
 
 		// 每天最多计入 dailyQuota，超出部分是加油包
-		if dayUsed > dailyQuota {
-			dayUsed = dailyQuota
+		if dayUsed > user.DailyQuota {
+			dayUsed = user.DailyQuota
 		}
 
 		weeklyUsed += dayUsed
+
+		// 移动到下一天
+		currentDay = currentDay.Add(24 * time.Hour)
 	}
 
 	return weeklyUsed
