@@ -136,6 +136,51 @@ func GetTokenUsage(c *gin.Context) {
 	})
 }
 
+// GetTokenGroupQuotaSummary 统计当前用户在指定 token 分组下的令牌额度汇总。
+//
+// 规则：仅统计“总额度(剩余+已用) > 500000”的令牌，其余忽略。
+func GetTokenGroupQuotaSummary(c *gin.Context) {
+	group := strings.TrimSpace(c.Query("group"))
+	if group == "" {
+		common.ApiErrorMsg(c, "缺少参数 group")
+		return
+	}
+
+	userId := c.GetInt("id")
+	if userId == 0 {
+		common.ApiErrorMsg(c, "无效的用户")
+		return
+	}
+
+	// 仅统计“总额度(剩余+已用) > 500000”的令牌，避免将极小额度的测试令牌计入。
+	minTotalQuota := 500000
+
+	// 汇总指定用户、指定 token 分组下的额度（token 表：remain_quota/used_quota）。
+	base := model.DB.Model(&model.Token{}).
+		Where(map[string]interface{}{"user_id": userId, "group": group}).
+		Where("remain_quota + used_quota > ?", minTotalQuota)
+
+	var remainSum int64
+	if err := base.Select("COALESCE(SUM(remain_quota), 0)").Scan(&remainSum).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var usedSum int64
+	if err := base.Select("COALESCE(SUM(used_quota), 0)").Scan(&usedSum).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	totalQuota := remainSum + usedSum
+	common.ApiSuccess(c, gin.H{
+		"group":        group,
+		"user_id":      userId,
+		"total_quota":  totalQuota,
+		"remain_quota": remainSum,
+		"used_quota":   usedSum,
+	})
+}
+
 func AddToken(c *gin.Context) {
 	token := model.Token{}
 	err := c.ShouldBindJSON(&token)

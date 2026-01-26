@@ -177,6 +177,9 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 		}
 
+		// 第三方 access token 调用：按 token 分组统计当前用户的额度汇总
+		apiRouter.GET("/token/group_quota", middleware.CriticalRateLimit(), middleware.UserAuth(), controller.GetTokenGroupQuotaSummary)
+
 		usageRoute := apiRouter.Group("/usage")
 		usageRoute.Use(middleware.CriticalRateLimit())
 		{
