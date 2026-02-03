@@ -20,6 +20,7 @@ var codexUserAgentPrefixes = []string{
 	"codex_cli_rs/",
 	"codex_exec/",
 	"codex_vscode/",
+	"Codex Desktop/",
 }
 
 // CodexClientRestriction 中间件用于限制只有 Codex 客户端才能访问 API
