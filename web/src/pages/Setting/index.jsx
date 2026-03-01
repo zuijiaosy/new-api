@@ -34,6 +34,7 @@ import {
   CreditCard,
   RefreshCw,
   Server,
+  Activity,
 } from 'lucide-react';
 
 import SystemSetting from '../../components/settings/SystemSetting';
@@ -49,6 +50,7 @@ import DrawingSetting from '../../components/settings/DrawingSetting';
 import PaymentSetting from '../../components/settings/PaymentSetting';
 import QuotaResetSetting from '../../components/settings/QuotaResetSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
+import PerformanceSetting from '../../components/settings/PerformanceSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
@@ -157,6 +159,16 @@ const Setting = () => {
       ),
       content: <ModelDeploymentSetting />,
       itemKey: 'model-deployment',
+    });
+    panes.push({
+      tab: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <Activity size={18} />
+          {t('性能设置')}
+        </span>
+      ),
+      content: <PerformanceSetting />,
+      itemKey: 'performance',
     });
     panes.push({
       tab: (

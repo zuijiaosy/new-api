@@ -431,7 +431,7 @@ func getWeeklyUsedQuota(user *CodexzhUser) int64 {
 		}
 
 		// 查询当天消耗
-		stat := model.SumUsedQuota(
+		stat, _ := model.SumUsedQuota(
 			model.LogTypeConsume,
 			startUnix,
 			endUnix,
