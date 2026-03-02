@@ -18,12 +18,20 @@ var defNext = func(c *gin.Context) {
 	c.Next()
 }
 
-func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
-	clientIP := c.ClientIP()
+// isWhitelistedIP 返回 true 表示该 IP 在白名单中，应跳过限流
+func isWhitelistedIP(clientIP string) bool {
 	for _, ip := range common.RateLimitWhitelistIPs {
 		if clientIP == ip {
-			return
+			return true
 		}
+	}
+	return false
+}
+
+func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
+	clientIP := c.ClientIP()
+	if isWhitelistedIP(clientIP) {
+		return
 	}
 
 	ctx := context.Background()
@@ -73,10 +81,8 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 
 func memoryRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
 	clientIP := c.ClientIP()
-	for _, ip := range common.RateLimitWhitelistIPs {
-		if clientIP == ip {
-			return
-		}
+	if isWhitelistedIP(clientIP) {
+		return
 	}
 
 	key := mark + clientIP
@@ -136,6 +142,10 @@ func UploadRateLimit() func(c *gin.Context) {
 func userRateLimitFactory(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
 	if common.RedisEnabled {
 		return func(c *gin.Context) {
+			if isWhitelistedIP(c.ClientIP()) {
+				c.Next()
+				return
+			}
 			userId := c.GetInt("id")
 			if userId == 0 {
 				c.Status(http.StatusUnauthorized)
@@ -149,6 +159,10 @@ func userRateLimitFactory(maxRequestNum int, duration int64, mark string) func(c
 	// It's safe to call multi times.
 	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
 	return func(c *gin.Context) {
+		if isWhitelistedIP(c.ClientIP()) {
+			c.Next()
+			return
+		}
 		userId := c.GetInt("id")
 		if userId == 0 {
 			c.Status(http.StatusUnauthorized)
