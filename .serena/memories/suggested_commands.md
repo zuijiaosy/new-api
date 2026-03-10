@@ -1,0 +1,10 @@
+- 后端开发启动：`go run main.go`
+- 前后端一起启动（makefile 中定义）：`make -f makefile all`
+- 前端安装依赖：`cd web && bun install`
+- 前端开发：`cd web && bun run dev`
+- 前端构建：`cd web && bun run build`
+- 前端格式检查：`cd web && bun run lint`
+- 前端格式修复：`cd web && bun run lint:fix`
+- 前端 ESLint：`cd web && bun run eslint`
+- 前端 i18n：`cd web && bun run i18n:extract && bun run i18n:sync && bun run i18n:lint`
+- 常用系统命令（Darwin/zsh）：`git status`、`git diff`、`ls`、`find`、`grep`、`sed`。

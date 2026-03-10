@@ -50,10 +50,17 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const [editingToken, setEditingToken] = useState({
     id: undefined,
   });
+  const [showRPMEdit, setShowRPMEdit] = useState(false);
+  const [editingRPMToken, setEditingRPMToken] = useState({
+    id: undefined,
+  });
 
   // UI state
   const [compactMode, setCompactMode] = useTableCompactMode('tokens');
   const [showKeys, setShowKeys] = useState({});
+  const [defaultTokenRPM, setDefaultTokenRPM] = useState(0);
+  const [tokenRPMMap, setTokenRPMMap] = useState({});
+  const [effectiveTokenRPMMap, setEffectiveTokenRPMMap] = useState({});
 
   // Form state
   const [formApi, setFormApi] = useState(null);
@@ -81,12 +88,44 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     }, 500);
   };
 
+  const closeRPMEdit = () => {
+    setShowRPMEdit(false);
+    setTimeout(() => {
+      setEditingRPMToken({
+        id: undefined,
+      });
+    }, 300);
+  };
+
   // Sync page data from API response
   const syncPageData = (payload) => {
-    setTokens(payload.items || []);
+    const items = payload.items || [];
+    setTokens(items);
     setTokenCount(payload.total || 0);
     setActivePage(payload.page || 1);
     setPageSize(payload.page_size || pageSize);
+    const tokenIds = items.map((item) => item.id).filter(Boolean);
+    loadTokenRPMOverview(tokenIds).then();
+  };
+
+  const loadTokenRPMOverview = async (tokenIds = []) => {
+    const idsQuery = tokenIds.join(',');
+    const url = idsQuery ? `/api/token/rpm?ids=${idsQuery}` : '/api/token/rpm';
+    try {
+      const res = await API.get(url);
+      const { success, message, data } = res.data;
+      if (!success) {
+        showError(message);
+        return;
+      }
+      const overrides = data?.overrides || {};
+      const effectiveMap = data?.effective_rpms || {};
+      setDefaultTokenRPM(Number(data?.default_rpm || 0));
+      setTokenRPMMap(overrides);
+      setEffectiveTokenRPMMap(effectiveMap);
+    } catch (error) {
+      showError(error.message || t('加载令牌 RPM 设置失败'));
+    }
   };
 
   // Load tokens function
@@ -107,6 +146,11 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const refresh = async (page = activePage) => {
     await loadTokens(page);
     setSelectedKeys([]);
+  };
+
+  const refreshTokenRPMOverview = async () => {
+    const tokenIds = tokens.map((item) => item.id).filter(Boolean);
+    await loadTokenRPMOverview(tokenIds);
   };
 
   // Copy text function
@@ -206,8 +250,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   // Search tokens function
   const searchTokens = async (page = 1, size = pageSize) => {
     const normalizedPage = Number.isInteger(page) && page > 0 ? page : 1;
-    const normalizedSize =
-      Number.isInteger(size) && size > 0 ? size : pageSize;
+    const normalizedSize = Number.isInteger(size) && size > 0 ? size : pageSize;
 
     const { searchKeyword, searchToken } = getFormValues();
     if (searchKeyword === '' && searchToken === '') {
@@ -386,12 +429,21 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     editingToken,
     setEditingToken,
     closeEdit,
+    showRPMEdit,
+    setShowRPMEdit,
+    editingRPMToken,
+    setEditingRPMToken,
+    closeRPMEdit,
 
     // UI state
     compactMode,
     setCompactMode,
     showKeys,
     setShowKeys,
+    defaultTokenRPM,
+    setDefaultTokenRPM,
+    tokenRPMMap,
+    effectiveTokenRPMMap,
 
     // Form state
     formApi,
@@ -414,6 +466,8 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     batchDeleteTokens,
     batchCopyTokens,
     syncPageData,
+    loadTokenRPMOverview,
+    refreshTokenRPMOverview,
 
     // Translation
     t,

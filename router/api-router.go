@@ -247,9 +247,15 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			tokenRoute.GET("/", controller.GetAllTokens)
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
+			tokenRoute.GET("/rpm", controller.GetTokenRPMOverview)
+			tokenRoute.GET("/rpm/default", controller.GetDefaultTokenRPM)
 			tokenRoute.GET("/:id", controller.GetToken)
 			tokenRoute.POST("/", controller.AddToken)
+			tokenRoute.PUT("/rpm", controller.UpdateTokenRPM)
+			tokenRoute.PUT("/rpm/default", controller.UpdateDefaultTokenRPM)
 			tokenRoute.PUT("/", controller.UpdateToken)
+			tokenRoute.DELETE("/rpm", controller.DeleteTokenRPM)
+			tokenRoute.DELETE("/rpm/default", controller.DeleteDefaultTokenRPM)
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 		}

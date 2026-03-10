@@ -1,0 +1,5 @@
+- 项目是 `new-api`，一个基于 Go 的 AI API 网关/代理，聚合多家上游模型服务，提供统一 API、用户管理、计费、限流和管理后台。
+- 后端技术栈：Go 1.25、Gin、GORM、Redis、多数据库支持（SQLite/MySQL/PostgreSQL）。
+- 前端技术栈：React 18、Vite、Semi Design，前端包管理优先使用 bun。
+- 目录结构采用分层架构：`router -> controller -> service -> model`，并包含 `relay/` 渠道适配、`middleware/`、`setting/`、`common/`、`dto/`、`web/` 等模块。
+- 关键项目约束：业务代码禁止直接调用 `encoding/json` 的 marshal/unmarshal，统一走 `common/json.go`；数据库逻辑必须同时兼容 SQLite/MySQL/PostgreSQL；新增 relay 渠道需考虑 `StreamOptions`；受保护的项目标识不得修改。

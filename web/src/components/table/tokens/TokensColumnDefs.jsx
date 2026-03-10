@@ -252,6 +252,30 @@ const renderAllowIps = (text, t) => {
   return <Space wrap>{ipTags}</Space>;
 };
 
+const renderRPMColumn = (record, tokenRPMMap, effectiveTokenRPMMap, t) => {
+  const explicitRPM = Number(tokenRPMMap?.[record.id] || 0);
+  const effectiveRPM = Number(effectiveTokenRPMMap?.[record.id] || 0);
+  if (effectiveRPM <= 0) {
+    return (
+      <Tag color='white' shape='circle'>
+        {t('不限制')}
+      </Tag>
+    );
+  }
+  if (explicitRPM > 0) {
+    return (
+      <Tag color='blue' shape='circle'>
+        {effectiveRPM} RPM
+      </Tag>
+    );
+  }
+  return (
+    <Tag color='green' shape='circle'>
+      {effectiveRPM} RPM({t('默认')})
+    </Tag>
+  );
+};
+
 // Render separate quota usage column
 const renderQuotaUsage = (text, record, t) => {
   const { Paragraph } = Typography;
@@ -315,6 +339,7 @@ const renderOperations = (
   setShowEdit,
   manageToken,
   refresh,
+  openRPMEdit,
   t,
 ) => {
   let chatsArray = [];
@@ -403,6 +428,16 @@ const renderOperations = (
       </Button>
 
       <Button
+        type='tertiary'
+        size='small'
+        onClick={() => {
+          openRPMEdit(record);
+        }}
+      >
+        {t('RPM')}
+      </Button>
+
+      <Button
         type='danger'
         size='small'
         onClick={() => {
@@ -434,6 +469,9 @@ export const getTokensColumns = ({
   setEditingToken,
   setShowEdit,
   refresh,
+  tokenRPMMap,
+  effectiveTokenRPMMap,
+  openRPMEdit,
 }) => {
   return [
     {
@@ -474,6 +512,12 @@ export const getTokensColumns = ({
       render: (text) => renderAllowIps(text, t),
     },
     {
+      title: t('RPM'),
+      key: 'rpm',
+      render: (text, record) =>
+        renderRPMColumn(record, tokenRPMMap, effectiveTokenRPMMap, t),
+    },
+    {
       title: t('创建时间'),
       dataIndex: 'created_time',
       render: (text, record, index) => {
@@ -504,6 +548,7 @@ export const getTokensColumns = ({
           setShowEdit,
           manageToken,
           refresh,
+          openRPMEdit,
           t,
         ),
     },

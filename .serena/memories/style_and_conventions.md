@@ -1,0 +1,7 @@
+- 回答、注释、说明优先使用中文。
+- 代码遵循清晰命名、合理抽象、少改旧逻辑、优先新增扩展的原则；删除无用代码，不保留 TODO/占位实现。
+- Python 若出现需使用简单直白语法，但本项目主体为 Go/React。
+- 后端遵循分层架构：Router -> Controller -> Service -> Model。
+- 业务 JSON 编解码必须使用 `common.Marshal`、`common.Unmarshal`、`common.DecodeJson` 等封装。
+- 数据库代码必须兼容 SQLite/MySQL/PostgreSQL，优先用 GORM 抽象，必要时使用 `model/main.go` 中的兼容变量。
+- 前端 i18n 使用 `useTranslation()`，直接 `t('中文key')`；翻译文件位于 `web/src/i18n/locales/`。

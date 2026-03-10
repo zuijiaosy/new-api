@@ -46,6 +46,9 @@ const TokensTable = (tokensData) => {
     setEditingToken,
     setShowEdit,
     refresh,
+    tokenRPMMap,
+    effectiveTokenRPMMap,
+    openRPMEdit,
     t,
   } = tokensData;
 
@@ -61,6 +64,9 @@ const TokensTable = (tokensData) => {
       setEditingToken,
       setShowEdit,
       refresh,
+      tokenRPMMap,
+      effectiveTokenRPMMap,
+      openRPMEdit,
     });
   }, [
     t,
@@ -72,6 +78,9 @@ const TokensTable = (tokensData) => {
     setEditingToken,
     setShowEdit,
     refresh,
+    tokenRPMMap,
+    effectiveTokenRPMMap,
+    openRPMEdit,
   ]);
 
   // Handle compact mode by removing fixed positioning

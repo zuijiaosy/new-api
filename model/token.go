@@ -360,6 +360,40 @@ func DeleteTokenById(id int, userId int) (err error) {
 	return token.Delete()
 }
 
+func DeleteTokenWithRateLimitsById(id int, userId int) error {
+	if id == 0 || userId == 0 {
+		return errors.New("id 或 userId 为空！")
+	}
+
+	tx := DB.Begin()
+	token := Token{}
+	if err := tx.Where("id = ? AND user_id = ?", id, userId).First(&token).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Delete(&token).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := deleteTokenRateLimitRows(tx, userId, []int{id}); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	invalidateTokenRateLimitCaches(userId, []int{id})
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if err := cacheDeleteToken(token.Key); err != nil {
+				common.SysLog("failed to delete token cache: " + err.Error())
+			}
+		})
+	}
+	return nil
+}
+
 func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
@@ -450,6 +484,44 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 		return 0, err
 	}
 
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			for _, t := range tokens {
+				_ = cacheDeleteToken(t.Key)
+			}
+		})
+	}
+
+	return len(tokens), nil
+}
+
+func BatchDeleteTokensWithRateLimits(ids []int, userId int) (int, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("ids 不能为空！")
+	}
+
+	tx := DB.Begin()
+
+	var tokens []Token
+	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Find(&tokens).Error; err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+
+	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Delete(&Token{}).Error; err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+	if err := deleteTokenRateLimitRows(tx, userId, ids); err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 0, err
+	}
+
+	invalidateTokenRateLimitCaches(userId, ids)
 	if common.RedisEnabled {
 		gopool.Go(func() {
 			for _, t := range tokens {

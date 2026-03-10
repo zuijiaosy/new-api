@@ -255,7 +255,7 @@ func AddToken(c *gin.Context) {
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt("id")
-	err := model.DeleteTokenById(id, userId)
+	err := model.DeleteTokenWithRateLimitsById(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -343,7 +343,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		return
 	}
 	userId := c.GetInt("id")
-	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
+	count, err := model.BatchDeleteTokensWithRateLimits(tokenBatch.Ids, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
