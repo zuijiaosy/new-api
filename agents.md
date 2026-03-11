@@ -130,3 +130,12 @@ For request structs that are parsed from client JSON and then re-marshaled to up
   - field absent in client JSON => `nil` => omitted on marshal;
   - field explicitly set to zero/false => non-`nil` pointer => must still be sent upstream.
 - Avoid using non-pointer scalars with `omitempty` for optional request parameters, because zero values (`0`, `0.0`, `false`) will be silently dropped during marshal.
+
+### Rule 7: Prefer Additive Changes for Requirements
+
+When implementing requirements, prefer additive changes over modifying or deleting existing code whenever reasonable:
+
+- Prefer adding new code paths, extension points, adapters, or configuration switches first, so existing stable behavior remains intact.
+- Minimize modifications to existing shared logic and avoid deleting code unless it is clearly obsolete and safe to remove.
+- Prioritize stability and reusability in the design, especially for code that is frequently touched across branches.
+- Consider that this project often needs to pull and merge PRs; choose implementations that reduce merge conflicts and lower the chance of interfering with parallel work.
