@@ -1,7 +1,6 @@
 package common
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -82,8 +81,6 @@ func InitEnv() {
 	// Initialize variables from constants.go that were using environment variables
 	DebugEnabled = os.Getenv("DEBUG") == "true"
 	MemoryCacheEnabled = os.Getenv("MEMORY_CACHE_ENABLED") == "true"
-	RequestLogEnabled = os.Getenv("REQUEST_LOG_ENABLED") == "false"
-	InfoLogEnabled = os.Getenv("INFO_LOG_ENABLED") != "false" // 默认开启，设置为 false 才关闭
 	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
 	TLSInsecureSkipVerify = GetEnvOrDefaultBool("TLS_INSECURE_SKIP_VERIFY", false)
 	if TLSInsecureSkipVerify {
@@ -120,18 +117,6 @@ func InitEnv() {
 	GlobalWebRateLimitNum = GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", 60)
 	GlobalWebRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT_DURATION", 180))
 
-	whitelistIPs := os.Getenv("RATE_LIMIT_WHITELIST_IPS")
-	if whitelistIPs != "" {
-		ips := strings.Split(whitelistIPs, ",")
-		RateLimitWhitelistIPs = make([]string, 0, len(ips))
-		for _, ip := range ips {
-			trimmedIP := strings.TrimSpace(ip)
-			if trimmedIP != "" {
-				RateLimitWhitelistIPs = append(RateLimitWhitelistIPs, trimmedIP)
-			}
-		}
-	}
-
 	CriticalRateLimitEnable = GetEnvOrDefaultBool("CRITICAL_RATE_LIMIT_ENABLE", true)
 	CriticalRateLimitNum = GetEnvOrDefault("CRITICAL_RATE_LIMIT", 20)
 	CriticalRateLimitDuration = int64(GetEnvOrDefault("CRITICAL_RATE_LIMIT_DURATION", 20*60))
@@ -163,9 +148,6 @@ func initConstantEnv() {
 	// 异步任务超时时间（分钟），超过此时间未完成的任务将被标记为失败并退款。0 表示禁用。
 	constant.TaskTimeoutMinutes = GetEnvOrDefault("TASK_TIMEOUT_MINUTES", 1440)
 
-	// codexzh 数据库连接（用于额度重置功能）
-	CodexzhSqlDSN = os.Getenv("CODEXZH_SQL_DSN")
-
 	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
 	if soraPatchStr != "" {
 		var taskPricePatches []string
@@ -177,42 +159,6 @@ func initConstantEnv() {
 			}
 		}
 		constant.TaskPricePatches = taskPricePatches
-	}
-
-	// 解析响应内容替换配置
-	// 支持两种格式：
-	// 1. JSON 格式: {"key1":"value1","key2":"value2"}
-	// 2. 简单格式: key1:value1,key2:value2
-	responseReplacementsStr := os.Getenv("RESPONSE_CONTENT_REPLACEMENTS")
-	if responseReplacementsStr != "" {
-		ResponseContentReplacements = make(map[string]string)
-		// 尝试 JSON 解析
-		if strings.HasPrefix(responseReplacementsStr, "{") {
-			if err := json.Unmarshal([]byte(responseReplacementsStr), &ResponseContentReplacements); err != nil {
-				log.Printf("WARNING: Failed to parse RESPONSE_CONTENT_REPLACEMENTS as JSON: %v", err)
-				ResponseContentReplacements = nil
-			}
-		} else {
-			// 简单格式解析: key1:value1,key2:value2
-			pairs := strings.Split(responseReplacementsStr, ",")
-			for _, pair := range pairs {
-				pair = strings.TrimSpace(pair)
-				if pair == "" {
-					continue
-				}
-				parts := strings.SplitN(pair, ":", 2)
-				if len(parts) == 2 {
-					key := strings.TrimSpace(parts[0])
-					value := strings.TrimSpace(parts[1])
-					if key != "" {
-						ResponseContentReplacements[key] = value
-					}
-				}
-			}
-		}
-		if len(ResponseContentReplacements) > 0 {
-			log.Printf("Loaded %d response content replacement rules", len(ResponseContentReplacements))
-		}
 	}
 
 	// Initialize trusted redirect domains for URL validation

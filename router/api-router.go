@@ -247,21 +247,13 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			tokenRoute.GET("/", controller.GetAllTokens)
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
-			tokenRoute.GET("/rpm", controller.GetTokenRPMOverview)
-			tokenRoute.GET("/rpm/default", controller.GetDefaultTokenRPM)
 			tokenRoute.GET("/:id", controller.GetToken)
+			tokenRoute.POST("/:id/key", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKey)
 			tokenRoute.POST("/", controller.AddToken)
-			tokenRoute.PUT("/rpm", controller.UpdateTokenRPM)
-			tokenRoute.PUT("/rpm/default", controller.UpdateDefaultTokenRPM)
 			tokenRoute.PUT("/", controller.UpdateToken)
-			tokenRoute.DELETE("/rpm", controller.DeleteTokenRPM)
-			tokenRoute.DELETE("/rpm/default", controller.DeleteDefaultTokenRPM)
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 		}
-
-		// 第三方 access token 调用：按 token 分组统计当前用户的额度汇总
-		apiRouter.GET("/token/group_quota", middleware.CriticalRateLimit(), middleware.UserAuth(), controller.GetTokenGroupQuotaSummary)
 
 		usageRoute := apiRouter.Group("/usage")
 		usageRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
@@ -293,7 +285,6 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
-		logRoute.GET("/usage/card", middleware.AdminAuth(), controller.GetUsageCardStats)
 
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
@@ -351,15 +342,6 @@ func SetApiRouter(router *gin.Engine) {
 			modelsRoute.POST("/", controller.CreateModelMeta)
 			modelsRoute.PUT("/", controller.UpdateModelMeta)
 			modelsRoute.DELETE("/:id", controller.DeleteModelMeta)
-		}
-
-		// 额度重置管理接口
-		quotaResetRoute := apiRouter.Group("/quota-reset")
-		quotaResetRoute.Use(middleware.RootAuth())
-		{
-			quotaResetRoute.GET("/logs", controller.GetQuotaResetLogs)
-			quotaResetRoute.GET("/status", controller.GetQuotaResetStatus)
-			quotaResetRoute.POST("/trigger", controller.TriggerQuotaReset)
 		}
 
 		// Deployments (model deployment management)

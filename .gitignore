@@ -16,21 +16,16 @@ new-api
 .DS_Store
 tiktoken_cache
 .eslintcache
-.history
-node_modules
-.claude
-electron/node_modules
-electron/dist
 .gocache
 .gomodcache/
 .cache
 web/bun.lock
 plans
+.claude
 
+electron/node_modules
+electron/dist
 data/
-.pprof
-pprof/
-*.pprof
-mysql_data
+.gomodcache/
 .gocache-temp
 .gopath

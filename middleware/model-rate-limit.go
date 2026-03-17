@@ -172,12 +172,6 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 			return
 		}
 
-		// 白名单 IP 跳过限流
-		if isWhitelistedIP(c.ClientIP()) {
-			c.Next()
-			return
-		}
-
 		// 计算限流参数
 		duration := int64(setting.ModelRequestRateLimitDurationMinutes * 60)
 		totalMaxCount := setting.ModelRequestRateLimitCount

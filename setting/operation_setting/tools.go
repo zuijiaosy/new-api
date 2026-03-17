@@ -4,10 +4,10 @@ import "strings"
 
 const (
 	// Web search
-	WebSearchPriceHigh = 0
-	WebSearchPrice     = 0
+	WebSearchPriceHigh = 25.00
+	WebSearchPrice     = 10.00
 	// File search
-	FileSearchPrice = 0
+	FileSearchPrice = 2.5
 )
 
 const (

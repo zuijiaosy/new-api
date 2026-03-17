@@ -108,17 +108,28 @@ const renderGroupColumn = (text, record, t) => {
 };
 
 // Render token key column with show/hide and copy functionality
-const renderTokenKey = (text, record, showKeys, setShowKeys, copyText) => {
-  const fullKey = 'sk-' + record.key;
-  const maskedKey =
-    'sk-' + record.key.slice(0, 4) + '**********' + record.key.slice(-4);
+const renderTokenKey = (
+  text,
+  record,
+  showKeys,
+  resolvedTokenKeys,
+  loadingTokenKeys,
+  toggleTokenVisibility,
+  copyTokenKey,
+) => {
   const revealed = !!showKeys[record.id];
+  const loading = !!loadingTokenKeys[record.id];
+  const keyValue =
+    revealed && resolvedTokenKeys[record.id]
+      ? resolvedTokenKeys[record.id]
+      : record.key || '';
+  const displayedKey = keyValue ? `sk-${keyValue}` : '';
 
   return (
     <div className='w-[200px]'>
       <Input
         readOnly
-        value={revealed ? fullKey : maskedKey}
+        value={displayedKey}
         size='small'
         suffix={
           <div className='flex items-center'>
@@ -127,10 +138,11 @@ const renderTokenKey = (text, record, showKeys, setShowKeys, copyText) => {
               size='small'
               type='tertiary'
               icon={revealed ? <IconEyeClosed /> : <IconEyeOpened />}
+              loading={loading}
               aria-label='toggle token visibility'
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                setShowKeys((prev) => ({ ...prev, [record.id]: !revealed }));
+                await toggleTokenVisibility(record);
               }}
             />
             <Button
@@ -138,10 +150,11 @@ const renderTokenKey = (text, record, showKeys, setShowKeys, copyText) => {
               size='small'
               type='tertiary'
               icon={<IconCopy />}
+              loading={loading}
               aria-label='copy token key'
               onClick={async (e) => {
                 e.stopPropagation();
-                await copyText(fullKey);
+                await copyTokenKey(record);
               }}
             />
           </div>
@@ -252,30 +265,6 @@ const renderAllowIps = (text, t) => {
   return <Space wrap>{ipTags}</Space>;
 };
 
-const renderRPMColumn = (record, tokenRPMMap, effectiveTokenRPMMap, t) => {
-  const explicitRPM = Number(tokenRPMMap?.[record.id] || 0);
-  const effectiveRPM = Number(effectiveTokenRPMMap?.[record.id] || 0);
-  if (effectiveRPM <= 0) {
-    return (
-      <Tag color='white' shape='circle'>
-        {t('不限制')}
-      </Tag>
-    );
-  }
-  if (explicitRPM > 0) {
-    return (
-      <Tag color='blue' shape='circle'>
-        {effectiveRPM} RPM
-      </Tag>
-    );
-  }
-  return (
-    <Tag color='green' shape='circle'>
-      {effectiveRPM} RPM({t('默认')})
-    </Tag>
-  );
-};
-
 // Render separate quota usage column
 const renderQuotaUsage = (text, record, t) => {
   const { Paragraph } = Typography;
@@ -339,7 +328,6 @@ const renderOperations = (
   setShowEdit,
   manageToken,
   refresh,
-  openRPMEdit,
   t,
 ) => {
   let chatsArray = [];
@@ -428,16 +416,6 @@ const renderOperations = (
       </Button>
 
       <Button
-        type='tertiary'
-        size='small'
-        onClick={() => {
-          openRPMEdit(record);
-        }}
-      >
-        {t('RPM')}
-      </Button>
-
-      <Button
         type='danger'
         size='small'
         onClick={() => {
@@ -462,16 +440,15 @@ const renderOperations = (
 export const getTokensColumns = ({
   t,
   showKeys,
-  setShowKeys,
-  copyText,
+  resolvedTokenKeys,
+  loadingTokenKeys,
+  toggleTokenVisibility,
+  copyTokenKey,
   manageToken,
   onOpenLink,
   setEditingToken,
   setShowEdit,
   refresh,
-  tokenRPMMap,
-  effectiveTokenRPMMap,
-  openRPMEdit,
 }) => {
   return [
     {
@@ -499,7 +476,15 @@ export const getTokensColumns = ({
       title: t('密钥'),
       key: 'token_key',
       render: (text, record) =>
-        renderTokenKey(text, record, showKeys, setShowKeys, copyText),
+        renderTokenKey(
+          text,
+          record,
+          showKeys,
+          resolvedTokenKeys,
+          loadingTokenKeys,
+          toggleTokenVisibility,
+          copyTokenKey,
+        ),
     },
     {
       title: t('可用模型'),
@@ -510,12 +495,6 @@ export const getTokensColumns = ({
       title: t('IP限制'),
       dataIndex: 'allow_ips',
       render: (text) => renderAllowIps(text, t),
-    },
-    {
-      title: t('RPM'),
-      key: 'rpm',
-      render: (text, record) =>
-        renderRPMColumn(record, tokenRPMMap, effectiveTokenRPMMap, t),
     },
     {
       title: t('创建时间'),
@@ -548,7 +527,6 @@ export const getTokensColumns = ({
           setShowEdit,
           manageToken,
           refresh,
-          openRPMEdit,
           t,
         ),
     },

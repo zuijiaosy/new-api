@@ -39,8 +39,6 @@ export default function RequestRateLimit(props) {
     ModelRequestRateLimitSuccessCount: 1000,
     ModelRequestRateLimitDurationMinutes: 1,
     ModelRequestRateLimitGroup: '',
-    CodexClientRestrictionEnabled: false,
-    CodexClientRestrictionTrustedIPWhitelist: '',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -234,64 +232,6 @@ export default function RequestRateLimit(props) {
             <Row>
               <Button size='default' onClick={onSubmit}>
                 {t('保存模型速率限制')}
-              </Button>
-            </Row>
-          </Form.Section>
-          <Form.Section text={t('Codex 客户端限制')}>
-            <Row gutter={16}>
-              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
-                <Form.Switch
-                  field={'CodexClientRestrictionEnabled'}
-                  label={t('启用 Codex 客户端限制')}
-                  size='default'
-                  checkedText='｜'
-                  uncheckedText='〇'
-                  extraText={t('启用后，只有来自 Codex 客户端的请求才能访问 API')}
-                  onChange={(value) => {
-                    setInputs({
-                      ...inputs,
-                      CodexClientRestrictionEnabled: value,
-                    });
-                  }}
-                />
-              </Col>
-            </Row>
-            <Row>
-              <Col xs={24} sm={16}>
-                <Form.TextArea
-                  label={t('可信任请求 IP 白名单')}
-                  placeholder={t('示例：\\n1.2.3.4\\n10.0.0.0/8')}
-                  field={'CodexClientRestrictionTrustedIPWhitelist'}
-                  autosize={{ minRows: 3, maxRows: 10 }}
-                  extraText={
-                    <div>
-                      <p>{t('说明：')}</p>
-                      <ul>
-                        <li>
-                          {t(
-                            '支持单个 IP 与 CIDR（如 1.2.3.4、10.0.0.0/8、2001:db8::/32）。',
-                          )}
-                        </li>
-                        <li>
-                          {t(
-                            '可使用换行/空格/逗号/分号分隔，命中后将跳过 Codex 客户端验证。',
-                          )}
-                        </li>
-                      </ul>
-                    </div>
-                  }
-                  onChange={(value) => {
-                    setInputs({
-                      ...inputs,
-                      CodexClientRestrictionTrustedIPWhitelist: value,
-                    });
-                  }}
-                />
-              </Col>
-            </Row>
-            <Row>
-              <Button size='default' onClick={onSubmit}>
-                {t('保存 Codex 限制')}
               </Button>
             </Row>
           </Form.Section>

@@ -22,7 +22,6 @@ import (
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/router"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/quota_reset"
 	_ "github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -139,24 +138,6 @@ func main() {
 		model.InitBatchUpdater()
 	}
 
-	// 初始化 codexzh 数据库连接并启动额度重置定时任务
-	if common.CodexzhSqlDSN != "" {
-		err = quota_reset.InitCodexzhDB()
-		if err != nil {
-			common.SysLog("初始化 codexzh 数据库失败，额度重置功能将不可用: " + err.Error())
-		} else {
-			// 启动额度重置定时任务
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						common.SysLog(fmt.Sprintf("额度重置定时任务发生 panic，已退出: %v", r))
-					}
-				}()
-				quota_reset.StartQuotaResetScheduler()
-			}()
-		}
-	}
-
 	if os.Getenv("ENABLE_PPROF") == "true" {
 		gopool.Go(func() {
 			log.Println(http.ListenAndServe("0.0.0.0:8005", nil))
@@ -184,7 +165,6 @@ func main() {
 	// This will cause SSE not to work!!!
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
 	server.Use(middleware.RequestId())
-	server.Use(middleware.RequestLogger())
 	server.Use(middleware.PoweredBy())
 	server.Use(middleware.I18n())
 	middleware.SetUpLogger(server)

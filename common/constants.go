@@ -71,8 +71,6 @@ var EmailLoginAuthServerList = []string{
 
 var DebugEnabled bool
 var MemoryCacheEnabled bool
-var RequestLogEnabled bool
-var InfoLogEnabled = true // 控制 INFO 级别日志是否输出，默认开启
 
 var LogConsumeEnabled = true
 
@@ -130,18 +128,10 @@ var RelayTimeout int // unit is second
 var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int
 
-// codexzh 数据库连接字符串（用于额度重置功能）
-var CodexzhSqlDSN string
-
 var GeminiSafetySetting string
 
 // https://docs.cohere.com/docs/safety-modes Type; NONE/CONTEXTUAL/STRICT
 var CohereSafetySetting string
-
-// ResponseContentReplacements 响应内容替换配置
-// key 为要替换的内容，value 为替换后的内容
-// 用于隐藏上游渠道名称等敏感信息
-var ResponseContentReplacements map[string]string
 
 const (
 	RequestIdKey = "X-Oneapi-Request-Id"
@@ -189,9 +179,6 @@ var (
 	// Per-user search rate limit (applies after authentication, keyed by user ID)
 	SearchRateLimitNum            = 10
 	SearchRateLimitDuration int64 = 60
-
-	// RateLimitWhitelistIPs 配置免流控的 IP 列表
-	RateLimitWhitelistIPs []string
 )
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute

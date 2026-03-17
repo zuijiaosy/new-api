@@ -14,6 +14,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func buildMaskedTokenResponse(token *model.Token) *model.Token {
+	if token == nil {
+		return nil
+	}
+	maskedToken := *token
+	maskedToken.Key = token.GetMaskedKey()
+	return &maskedToken
+}
+
+func buildMaskedTokenResponses(tokens []*model.Token) []*model.Token {
+	maskedTokens := make([]*model.Token, 0, len(tokens))
+	for _, token := range tokens {
+		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
+	}
+	return maskedTokens
+}
+
 func GetAllTokens(c *gin.Context) {
 	userId := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
@@ -24,9 +41,8 @@ func GetAllTokens(c *gin.Context) {
 	}
 	total, _ := model.CountUserTokens(userId)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tokens)
+	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
 	common.ApiSuccess(c, pageInfo)
-	return
 }
 
 func SearchTokens(c *gin.Context) {
@@ -42,9 +58,8 @@ func SearchTokens(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tokens)
+	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
 	common.ApiSuccess(c, pageInfo)
-	return
 }
 
 func GetToken(c *gin.Context) {
@@ -59,12 +74,24 @@ func GetToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    token,
+	common.ApiSuccess(c, buildMaskedTokenResponse(token))
+}
+
+func GetTokenKey(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	userId := c.GetInt("id")
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	token, err := model.GetTokenByIds(id, userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"key": token.GetFullKey(),
 	})
-	return
 }
 
 func GetTokenStatus(c *gin.Context) {
@@ -137,51 +164,6 @@ func GetTokenUsage(c *gin.Context) {
 	})
 }
 
-// GetTokenGroupQuotaSummary 统计当前用户在指定 token 分组下的令牌额度汇总。
-//
-// 规则：仅统计“总额度(剩余+已用) > 500000”的令牌，其余忽略。
-func GetTokenGroupQuotaSummary(c *gin.Context) {
-	group := strings.TrimSpace(c.Query("group"))
-	if group == "" {
-		common.ApiErrorMsg(c, "缺少参数 group")
-		return
-	}
-
-	userId := c.GetInt("id")
-	if userId == 0 {
-		common.ApiErrorMsg(c, "无效的用户")
-		return
-	}
-
-	// 仅统计“总额度(剩余+已用) > 500000”的令牌，避免将极小额度的测试令牌计入。
-	minTotalQuota := 500000
-
-	// 汇总指定用户、指定 token 分组下的额度（token 表：remain_quota/used_quota）。
-	base := model.DB.Model(&model.Token{}).
-		Where(map[string]interface{}{"user_id": userId, "group": group}).
-		Where("remain_quota + used_quota > ?", minTotalQuota)
-
-	var remainSum int64
-	if err := base.Select("COALESCE(SUM(remain_quota), 0)").Scan(&remainSum).Error; err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	var usedSum int64
-	if err := base.Select("COALESCE(SUM(used_quota), 0)").Scan(&usedSum).Error; err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	totalQuota := remainSum + usedSum
-	common.ApiSuccess(c, gin.H{
-		"group":        group,
-		"user_id":      userId,
-		"total_quota":  totalQuota,
-		"remain_quota": remainSum,
-		"used_quota":   usedSum,
-	})
-}
-
 func AddToken(c *gin.Context) {
 	token := model.Token{}
 	err := c.ShouldBindJSON(&token)
@@ -249,13 +231,12 @@ func AddToken(c *gin.Context) {
 		"success": true,
 		"message": "",
 	})
-	return
 }
 
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt("id")
-	err := model.DeleteTokenWithRateLimitsById(id, userId)
+	err := model.DeleteTokenById(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -264,7 +245,6 @@ func DeleteToken(c *gin.Context) {
 		"success": true,
 		"message": "",
 	})
-	return
 }
 
 func UpdateToken(c *gin.Context) {
@@ -328,7 +308,7 @@ func UpdateToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    cleanToken,
+		"data":    buildMaskedTokenResponse(cleanToken),
 	})
 }
 
@@ -343,7 +323,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		return
 	}
 	userId := c.GetInt("id")
-	count, err := model.BatchDeleteTokensWithRateLimits(tokenBatch.Ids, userId)
+	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return

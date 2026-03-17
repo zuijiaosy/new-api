@@ -39,8 +39,6 @@ import TokensFilters from './TokensFilters';
 import TokensDescription from './TokensDescription';
 import EditTokenModal from './modals/EditTokenModal';
 import CCSwitchModal from './modals/CCSwitchModal';
-import TokenRPMModal from './modals/TokenRPMModal';
-import TokenRPMSettings from './TokenRPMSettings';
 import { useTokensData } from '../../../hooks/tokens/useTokensData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -60,6 +58,7 @@ function TokensPage() {
     t: (k) => k,
     selectedModel: '',
     prefillKey: '',
+    fetchTokenKey: async () => '',
   });
   const [modelOptions, setModelOptions] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -67,11 +66,6 @@ function TokensPage() {
   const [prefillKey, setPrefillKey] = useState('');
   const [ccSwitchVisible, setCCSwitchVisible] = useState(false);
   const [ccSwitchKey, setCCSwitchKey] = useState('');
-
-  const openRPMEdit = (token) => {
-    tokensData.setEditingRPMToken(token);
-    tokensData.setShowRPMEdit(true);
-  };
 
   // Keep latest data for handlers inside notifications
   useEffect(() => {
@@ -81,6 +75,7 @@ function TokensPage() {
       t: tokensData.t,
       selectedModel,
       prefillKey,
+      fetchTokenKey: tokensData.fetchTokenKey,
     };
   }, [
     tokensData.tokens,
@@ -88,6 +83,7 @@ function TokensPage() {
     tokensData.t,
     selectedModel,
     prefillKey,
+    tokensData.fetchTokenKey,
   ]);
 
   const loadModels = async () => {
@@ -205,13 +201,14 @@ function TokensPage() {
   openCCSwitchModalRef.current = openCCSwitchModal;
 
   // Prefill to Fluent handler
-  const handlePrefillToFluent = () => {
+  const handlePrefillToFluent = async () => {
     const {
       tokens,
       selectedKeys,
       t,
       selectedModel: chosenModel,
       prefillKey: overrideKey,
+      fetchTokenKey,
     } = latestRef.current;
     const container = document.getElementById('fluent-new-api-container');
     if (!container) {
@@ -248,7 +245,11 @@ function TokensPage() {
         Toast.warning(t('没有可用令牌用于填充'));
         return;
       }
-      apiKeyToUse = 'sk-' + token.key;
+      try {
+        apiKeyToUse = 'sk-' + (await fetchTokenKey(token));
+      } catch (_) {
+        return;
+      }
     }
 
     const payload = {
@@ -358,7 +359,6 @@ function TokensPage() {
     setShowEdit,
     batchCopyTokens,
     batchDeleteTokens,
-    copyText,
 
     // Filters state
     formInitValues,
@@ -391,21 +391,6 @@ function TokensPage() {
         modelOptions={modelOptions}
       />
 
-      <TokenRPMModal
-        visible={tokensData.showRPMEdit}
-        token={tokensData.editingRPMToken}
-        explicitRPM={
-          tokensData.tokenRPMMap[tokensData.editingRPMToken?.id] || 0
-        }
-        effectiveRPM={
-          tokensData.effectiveTokenRPMMap[tokensData.editingRPMToken?.id] || 0
-        }
-        defaultTokenRPM={tokensData.defaultTokenRPM}
-        onClose={tokensData.closeRPMEdit}
-        refreshTokenRPMOverview={tokensData.refreshTokenRPMOverview}
-        t={t}
-      />
-
       <CardPro
         type='type1'
         descriptionArea={
@@ -423,18 +408,8 @@ function TokensPage() {
               setShowEdit={setShowEdit}
               batchCopyTokens={batchCopyTokens}
               batchDeleteTokens={batchDeleteTokens}
-              copyText={copyText}
               t={t}
             />
-
-            <div className='w-full md:w-full lg:w-auto order-1 md:order-2'>
-              <TokenRPMSettings
-                defaultTokenRPM={tokensData.defaultTokenRPM}
-                setDefaultTokenRPM={tokensData.setDefaultTokenRPM}
-                refreshTokenRPMOverview={tokensData.refreshTokenRPMOverview}
-                t={t}
-              />
-            </div>
 
             <div className='w-full md:w-full lg:w-auto order-1 md:order-2'>
               <TokensFilters
@@ -459,7 +434,7 @@ function TokensPage() {
         })}
         t={tokensData.t}
       >
-        <TokensTable {...tokensData} openRPMEdit={openRPMEdit} />
+        <TokensTable {...tokensData} />
       </CardPro>
     </>
   );
