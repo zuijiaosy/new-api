@@ -256,6 +256,10 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 	groupRatio := relayInfo.PriceData.GroupRatioInfo.GroupRatio
 	modelPrice := relayInfo.PriceData.ModelPrice
 	cachedCreationRatio := relayInfo.PriceData.CacheCreationRatio
+	ratio_setting.ApplyPromptTokenPricingOverrides(modelName, promptTokens, &relayInfo.PriceData)
+	completionRatio = relayInfo.PriceData.CompletionRatio
+	cacheRatio = relayInfo.PriceData.CacheRatio
+	modelRatio = relayInfo.PriceData.ModelRatio
 
 	// Convert values to decimal for precise calculation
 	dPromptTokens := decimal.NewFromInt(int64(promptTokens))

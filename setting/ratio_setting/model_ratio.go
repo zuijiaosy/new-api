@@ -715,6 +715,9 @@ func FormatMatchingModelName(name string) string {
 	if strings.HasPrefix(name, "gpt-4o-gizmo") {
 		name = "gpt-4o-gizmo-*"
 	}
+	if strings.HasPrefix(name, "gpt-5.4-") && !strings.HasPrefix(name, "gpt-5.4-pro") {
+		name = "gpt-5.4"
+	}
 	return name
 }
 

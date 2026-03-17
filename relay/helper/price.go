@@ -61,8 +61,9 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	var audioRatio float64
 	var audioCompletionRatio float64
 	var freeModel bool
+	preConsumedTokens := 0
 	if !usePrice {
-		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
+		preConsumedTokens = common.Max(promptTokens, common.PreConsumedQuota)
 		if meta.MaxTokens != 0 {
 			preConsumedTokens += meta.MaxTokens
 		}
@@ -130,6 +131,9 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		CacheCreation5mRatio: cacheCreationRatio5m,
 		CacheCreation1hRatio: cacheCreationRatio1h,
 		QuotaToPreConsume:    preConsumedQuota,
+	}
+	if ratio_setting.ApplyPromptTokenPricingOverrides(info.OriginModelName, promptTokens, &priceData) {
+		priceData.QuotaToPreConsume = int(float64(preConsumedTokens) * priceData.ModelRatio * groupRatioInfo.GroupRatio)
 	}
 
 	if common.DebugEnabled {
