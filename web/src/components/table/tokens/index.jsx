@@ -39,6 +39,8 @@ import TokensFilters from './TokensFilters';
 import TokensDescription from './TokensDescription';
 import EditTokenModal from './modals/EditTokenModal';
 import CCSwitchModal from './modals/CCSwitchModal';
+import TokenRPMModal from './modals/TokenRPMModal';
+import TokenRPMSettings from './TokenRPMSettings';
 import { useTokensData } from '../../../hooks/tokens/useTokensData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -66,6 +68,11 @@ function TokensPage() {
   const [prefillKey, setPrefillKey] = useState('');
   const [ccSwitchVisible, setCCSwitchVisible] = useState(false);
   const [ccSwitchKey, setCCSwitchKey] = useState('');
+
+  const openRPMEdit = (token) => {
+    tokensData.setEditingRPMToken(token);
+    tokensData.setShowRPMEdit(true);
+  };
 
   // Keep latest data for handlers inside notifications
   useEffect(() => {
@@ -391,6 +398,21 @@ function TokensPage() {
         modelOptions={modelOptions}
       />
 
+      <TokenRPMModal
+        visible={tokensData.showRPMEdit}
+        token={tokensData.editingRPMToken}
+        explicitRPM={
+          tokensData.tokenRPMMap[tokensData.editingRPMToken?.id] || 0
+        }
+        effectiveRPM={
+          tokensData.effectiveTokenRPMMap[tokensData.editingRPMToken?.id] || 0
+        }
+        defaultTokenRPM={tokensData.defaultTokenRPM}
+        onClose={tokensData.closeRPMEdit}
+        refreshTokenRPMOverview={tokensData.refreshTokenRPMOverview}
+        t={t}
+      />
+
       <CardPro
         type='type1'
         descriptionArea={
@@ -410,6 +432,15 @@ function TokensPage() {
               batchDeleteTokens={batchDeleteTokens}
               t={t}
             />
+
+            <div className='w-full md:w-full lg:w-auto order-1 md:order-2'>
+              <TokenRPMSettings
+                defaultTokenRPM={tokensData.defaultTokenRPM}
+                setDefaultTokenRPM={tokensData.setDefaultTokenRPM}
+                refreshTokenRPMOverview={tokensData.refreshTokenRPMOverview}
+                t={t}
+              />
+            </div>
 
             <div className='w-full md:w-full lg:w-auto order-1 md:order-2'>
               <TokensFilters
@@ -434,7 +465,7 @@ function TokensPage() {
         })}
         t={tokensData.t}
       >
-        <TokensTable {...tokensData} />
+        <TokensTable {...tokensData} openRPMEdit={openRPMEdit} />
       </CardPro>
     </>
   );

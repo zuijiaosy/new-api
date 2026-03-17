@@ -207,6 +207,9 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
+	// 替换响应内容中的敏感信息
+	result.Type = common.ReplaceResponseContent(result.Type)
+	result.Message = common.ReplaceResponseContent(result.Message)
 	return result
 }
 
@@ -236,6 +239,9 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
+	// 替换响应内容中的敏感信息
+	result.Type = common.ReplaceResponseContent(result.Type)
+	result.Message = common.ReplaceResponseContent(result.Message)
 	return result
 }
 

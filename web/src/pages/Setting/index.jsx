@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Palette,
   CreditCard,
+  RefreshCw,
   Server,
   Activity,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import RatioSetting from '../../components/settings/RatioSetting';
 import ChatsSetting from '../../components/settings/ChatsSetting';
 import DrawingSetting from '../../components/settings/DrawingSetting';
 import PaymentSetting from '../../components/settings/PaymentSetting';
+import QuotaResetSetting from '../../components/settings/QuotaResetSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
 import PerformanceSetting from '../../components/settings/PerformanceSetting';
 
@@ -127,6 +129,16 @@ const Setting = () => {
       ),
       content: <RateLimitSetting />,
       itemKey: 'ratelimit',
+    });
+    panes.push({
+      tab: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <RefreshCw size={18} />
+          {t('额度重置')}
+        </span>
+      ),
+      content: <QuotaResetSetting />,
+      itemKey: 'quotareset',
     });
     panes.push({
       tab: (

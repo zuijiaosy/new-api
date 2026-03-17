@@ -242,6 +242,16 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "CodexClientRestrictionTrustedIPWhitelist":
+		normalized, _, err := setting.NormalizeCodexClientRestrictionTrustedIPWhitelist(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+		option.Value = normalized
 	case "AutomaticDisableStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
 		if err != nil {
@@ -253,13 +263,6 @@ func UpdateOption(c *gin.Context) {
 		}
 	case "AutomaticRetryStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
-		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
 		if err != nil {
