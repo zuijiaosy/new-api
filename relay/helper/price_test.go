@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestModelPriceHelperAppliesGPT54SnapshotTieredPricing(t *testing.T) {
+func TestModelPriceHelperDoesNotApplyGPT54TieredPricingToSnapshotModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ratio_setting.InitRatioSettings()
 
@@ -25,19 +25,19 @@ func TestModelPriceHelperAppliesGPT54SnapshotTieredPricing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if priceData.ModelRatio != 2.5 {
-		t.Fatalf("expected model ratio 2.5, got %v", priceData.ModelRatio)
+	if priceData.ModelRatio != 1.25 {
+		t.Fatalf("expected model ratio 1.25, got %v", priceData.ModelRatio)
 	}
-	if priceData.CompletionRatio != 4.5 {
-		t.Fatalf("expected completion ratio 4.5, got %v", priceData.CompletionRatio)
+	if priceData.CompletionRatio != 6 {
+		t.Fatalf("expected completion ratio 6, got %v", priceData.CompletionRatio)
 	}
-	if priceData.CacheRatio != 0.1 {
-		t.Fatalf("expected cache ratio 0.1, got %v", priceData.CacheRatio)
+	if priceData.CacheRatio != 1 {
+		t.Fatalf("expected cache ratio 1, got %v", priceData.CacheRatio)
 	}
-	if priceData.QuotaToPreConsume != 750000 {
-		t.Fatalf("expected pre-consume quota 750000, got %d", priceData.QuotaToPreConsume)
+	if priceData.QuotaToPreConsume != 375000 {
+		t.Fatalf("expected pre-consume quota 375000, got %d", priceData.QuotaToPreConsume)
 	}
-	if !priceData.TieredPricingApplied || priceData.TieredPricingTier != "long" {
-		t.Fatalf("expected long tiered pricing metadata, got applied=%v tier=%q", priceData.TieredPricingApplied, priceData.TieredPricingTier)
+	if priceData.TieredPricingApplied {
+		t.Fatalf("expected tiered pricing metadata to remain disabled, got applied=%v tier=%q", priceData.TieredPricingApplied, priceData.TieredPricingTier)
 	}
 }

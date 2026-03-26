@@ -1,15 +1,10 @@
 package ratio_setting
 
-import (
-	"strings"
-
-	"github.com/QuantumNous/new-api/types"
-)
+import "github.com/QuantumNous/new-api/types"
 
 const (
 	GPT54TieredPricingModelName      = "gpt-5.4"
 	GPT54TieredPricingThreshold      = 272000
-	gpt54TieredPricingProPrefix      = "gpt-5.4-pro"
 	gpt54ShortContextModelRatio      = 1.25
 	gpt54LongContextModelRatio       = 2.5
 	gpt54TieredPricingCacheRatio     = 0.1
@@ -18,14 +13,7 @@ const (
 )
 
 func IsGPT54TieredPricingModel(modelName string) bool {
-	modelName = FormatMatchingModelName(modelName)
-	if modelName == GPT54TieredPricingModelName {
-		return true
-	}
-	if strings.HasPrefix(modelName, gpt54TieredPricingProPrefix) {
-		return false
-	}
-	return strings.HasPrefix(modelName, GPT54TieredPricingModelName+"-")
+	return modelName == GPT54TieredPricingModelName
 }
 
 func ApplyPromptTokenPricingOverrides(modelName string, inputTokens int, priceData *types.PriceData) bool {

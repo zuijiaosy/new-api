@@ -65,7 +65,7 @@ func TestApplyTieredPricingForGPT54LongContext(t *testing.T) {
 	}
 }
 
-func TestApplyTieredPricingForGPT54SnapshotModel(t *testing.T) {
+func TestApplyTieredPricingDoesNotApplyForGPT54SnapshotModel(t *testing.T) {
 	priceData := &types.PriceData{
 		ModelRatio:      1.25,
 		CompletionRatio: 6,
@@ -73,17 +73,45 @@ func TestApplyTieredPricingForGPT54SnapshotModel(t *testing.T) {
 	}
 
 	applied := ApplyPromptTokenPricingOverrides("gpt-5.4-2026-03-05", 500000, priceData)
-	if !applied {
-		t.Fatal("expected tiered pricing to be applied for snapshot model")
+	if applied {
+		t.Fatal("expected tiered pricing not to be applied for snapshot model")
 	}
-	if priceData.ModelRatio != 2.5 {
-		t.Fatalf("expected snapshot model long-context ratio 2.5, got %v", priceData.ModelRatio)
+	if priceData.ModelRatio != 1.25 {
+		t.Fatalf("expected snapshot model ratio unchanged, got %v", priceData.ModelRatio)
 	}
-	if priceData.CompletionRatio != 4.5 {
-		t.Fatalf("expected snapshot model long-context completion ratio 4.5, got %v", priceData.CompletionRatio)
+	if priceData.CompletionRatio != 6 {
+		t.Fatalf("expected snapshot model completion ratio unchanged, got %v", priceData.CompletionRatio)
 	}
-	if priceData.TieredPricingTier != "long" {
-		t.Fatalf("expected snapshot model long tier, got %q", priceData.TieredPricingTier)
+	if priceData.CacheRatio != 0.1 {
+		t.Fatalf("expected snapshot model cache ratio unchanged, got %v", priceData.CacheRatio)
+	}
+	if priceData.TieredPricingApplied {
+		t.Fatal("expected snapshot model tiered pricing metadata to remain disabled")
+	}
+}
+
+func TestApplyTieredPricingDoesNotApplyForGPT54MiniModel(t *testing.T) {
+	priceData := &types.PriceData{
+		ModelRatio:      0.2,
+		CompletionRatio: 6,
+		CacheRatio:      0.1,
+	}
+
+	applied := ApplyPromptTokenPricingOverrides("gpt-5.4-mini", 500000, priceData)
+	if applied {
+		t.Fatal("expected tiered pricing not to be applied for mini model")
+	}
+	if priceData.ModelRatio != 0.2 {
+		t.Fatalf("expected mini model ratio unchanged, got %v", priceData.ModelRatio)
+	}
+	if priceData.CompletionRatio != 6 {
+		t.Fatalf("expected mini model completion ratio unchanged, got %v", priceData.CompletionRatio)
+	}
+	if priceData.CacheRatio != 0.1 {
+		t.Fatalf("expected mini model cache ratio unchanged, got %v", priceData.CacheRatio)
+	}
+	if priceData.TieredPricingApplied {
+		t.Fatal("expected mini model tiered pricing metadata to remain disabled")
 	}
 }
 
