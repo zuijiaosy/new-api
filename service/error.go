@@ -17,6 +17,11 @@ import (
 	"github.com/QuantumNous/new-api/types"
 )
 
+var defaultRetryFriendlyStatusCodeMapping = map[int]int{
+	http.StatusGatewayTimeout:  http.StatusBadGateway,
+	524:                        http.StatusBadGateway,
+}
+
 func MidjourneyErrorWrapper(code int, desc string) *dto.MidjourneyResponse {
 	return &dto.MidjourneyResponse{
 		Code:        code,
@@ -132,24 +137,33 @@ func ResetStatusCode(newApiErr *types.NewAPIError, statusCodeMappingStr string) 
 	if newApiErr == nil {
 		return
 	}
-	if statusCodeMappingStr == "" || statusCodeMappingStr == "{}" {
-		return
-	}
-	statusCodeMapping := make(map[string]any)
-	err := common.Unmarshal([]byte(statusCodeMappingStr), &statusCodeMapping)
-	if err != nil {
-		return
-	}
 	if newApiErr.StatusCode == http.StatusOK {
 		return
 	}
-	codeStr := strconv.Itoa(newApiErr.StatusCode)
-	if value, ok := statusCodeMapping[codeStr]; ok {
-		intCode, ok := parseStatusCodeMappingValue(value)
-		if !ok {
-			return
+
+	mappedByConfig := false
+	if statusCodeMappingStr != "" && statusCodeMappingStr != "{}" {
+		statusCodeMapping := make(map[string]any)
+		err := common.Unmarshal([]byte(statusCodeMappingStr), &statusCodeMapping)
+		if err == nil {
+			codeStr := strconv.Itoa(newApiErr.StatusCode)
+			if value, ok := statusCodeMapping[codeStr]; ok {
+				intCode, ok := parseStatusCodeMappingValue(value)
+				if ok {
+					newApiErr.StatusCode = intCode
+					mappedByConfig = true
+				}
+			}
+		} else {
+			logger.LogWarn(context.Background(), fmt.Sprintf("invalid status code mapping config: %s, err: %v", statusCodeMappingStr, err))
 		}
-		newApiErr.StatusCode = intCode
+	}
+
+	if mappedByConfig {
+		return
+	}
+	if fallbackCode, ok := defaultRetryFriendlyStatusCodeMapping[newApiErr.StatusCode]; ok {
+		newApiErr.StatusCode = fallbackCode
 	}
 }
 

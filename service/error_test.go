@@ -40,6 +40,30 @@ func TestResetStatusCode(t *testing.T) {
 			statusCodeConfig: `{"200":503}`,
 			expectedCode:     200,
 		},
+		{
+			name:             "fallback 504 to 502 without config",
+			statusCode:       504,
+			statusCodeConfig: "",
+			expectedCode:     502,
+		},
+		{
+			name:             "fallback 524 to 502 without config",
+			statusCode:       524,
+			statusCodeConfig: "",
+			expectedCode:     502,
+		},
+		{
+			name:             "fallback 504 to 502 when config invalid json",
+			statusCode:       504,
+			statusCodeConfig: `{"504":`,
+			expectedCode:     502,
+		},
+		{
+			name:             "respect explicit mapping over fallback",
+			statusCode:       504,
+			statusCodeConfig: `{"504":599}`,
+			expectedCode:     599,
+		},
 	}
 
 	for _, tc := range testCases {

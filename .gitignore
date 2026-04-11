@@ -35,3 +35,4 @@ pprof/
 mysql_data
 .gocache-temp
 .gopath
+.omx
