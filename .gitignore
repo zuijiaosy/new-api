@@ -36,3 +36,4 @@ mysql_data
 .gocache-temp
 .gopath
 .omx
+.omx/

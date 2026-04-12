@@ -17,6 +17,10 @@ import (
 // 北京时间时区 (UTC+8)
 var beijingLocation = time.FixedZone("CST", 8*3600)
 
+var quotaResetNow = func() time.Time {
+	return time.Now()
+}
+
 // QuotaResetLog 额度重置执行日志
 type QuotaResetLog struct {
 	ExecutedAt     time.Time `json:"executed_at"`
@@ -361,7 +365,7 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 //   - subscriptionStart 在本周一之前: 从本周一开始统计
 //   - subscriptionStart 在本周一之后: 从 subscriptionStart 所在天的 00:00 开始统计
 //
-// 2. 每天消耗最多计入 dailyQuota，超出部分视为加油包消耗，不计入周额度
+// 2. 统计总消费后，扣除本周内加油包购买当日剩余时间的消费（每笔扣减不超过该笔加油包额度）
 // 3. 所有时间计算使用北京时间(UTC+8)，确保时区一致性
 //
 // 参数:
@@ -372,8 +376,19 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 //
 //	本周(或续费后)已使用的周额度总量
 func getWeeklyUsedQuota(user *CodexzhUser) int64 {
-	now := time.Now().In(beijingLocation)
+	now := quotaResetNow().In(beijingLocation)
+	considerStart := getWeeklyConsiderStart(user, now)
+	totalConsumed := getUserConsumedQuotaBetween(user.Email, considerStart.Unix(), now.Unix())
+	excludedByTopUps := getWeeklyTopUpExcludedQuota(user.Email, considerStart, now)
 
+	weeklyUsed := totalConsumed - excludedByTopUps
+	if weeklyUsed < 0 {
+		return 0
+	}
+	return weeklyUsed
+}
+
+func getWeeklyConsiderStart(user *CodexzhUser, now time.Time) time.Time {
 	// 1. 计算本周一的开始时间（北京时间 00:00:00）
 	weekday := now.Weekday()
 	if weekday == time.Sunday {
@@ -387,75 +402,197 @@ func getWeeklyUsedQuota(user *CodexzhUser) int64 {
 		0, 0, 0, 0, beijingLocation,
 	)
 
-	// 2. 确定统计起点：取 max(本周一, subscriptionStart所在天的00:00)
 	considerStart := mondayStart
-
 	if user.SubscriptionStart != nil {
-		// 将 subscriptionStart 转换为北京时间
 		subStart := user.SubscriptionStart.In(beijingLocation)
-
-		// 如果续费时间在本周一之后，从续费当天的00:00开始统计
 		if subStart.After(mondayStart) {
-			// 规范化到续费当天的00:00:00
 			considerStart = time.Date(
 				subStart.Year(), subStart.Month(), subStart.Day(),
 				0, 0, 0, 0, beijingLocation,
 			)
 		}
 	}
+	return considerStart
+}
 
-	// 3. 从 considerStart 到 now 逐天统计消耗
-	var weeklyUsed int64 = 0
-	currentDay := considerStart
+func getUserConsumedQuotaBetween(email string, startUnix int64, endUnix int64) int64 {
+	if startUnix == 0 || endUnix == 0 || endUnix < startUnix {
+		return 0
+	}
+	stat, err := model.SumUsedQuota(
+		model.LogTypeConsume,
+		startUnix,
+		endUnix,
+		"",
+		"",
+		email,
+		0,
+		"",
+	)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("查询用户 %s 的消费额度失败: %v", email, err))
+		return 0
+	}
+	return int64(stat.Quota)
+}
 
-	// 注意：当 now 恰好是 00:00:00 时，需要把该秒的消费也统计进去（避免漏算）。
-	for !currentDay.After(now) {
-		dayStart := currentDay
-		dayEnd := dayStart.Add(24 * time.Hour)
-
-		isPartialDay := false
-		// 如果结束时间超过now，用now作为结束时间
-		if dayEnd.After(now) {
-			dayEnd = now
-			isPartialDay = true
-		}
-
-		// 注意：SumUsedQuota 内部使用 created_at <= endTimestamp（右闭区间）。
-		// 为避免跨天 00:00:00 的消费记录被前后两天重复统计：
-		// - 整天统计时，使用 [dayStart, dayEnd) 的语义，通过 endUnix-1 实现；
-		// - 当天（不完整的一天）统计时，允许统计到 now（包含当前秒）。
-		startUnix := dayStart.Unix()
-		endUnix := dayEnd.Unix()
-		if !isPartialDay {
-			endUnix = endUnix - 1
-		}
-
-		// 查询当天消耗
-		stat, _ := model.SumUsedQuota(
-			model.LogTypeConsume,
-			startUnix,
-			endUnix,
-			"",         // modelName
-			"",         // username
-			user.Email, // tokenName = email
-			0,          // channel
-			"",         // group
-		)
-
-		dayUsed := int64(stat.Quota)
-
-		// 每天最多计入 dailyQuota，超出部分是加油包
-		if dayUsed > user.DailyQuota {
-			dayUsed = user.DailyQuota
-		}
-
-		weeklyUsed += dayUsed
-
-		// 移动到下一天
-		currentDay = currentDay.Add(24 * time.Hour)
+func getWeeklyTopUpExcludedQuota(email string, considerStart time.Time, now time.Time) int64 {
+	if !considerStart.Before(now) && !considerStart.Equal(now) {
+		return 0
 	}
 
-	return weeklyUsed
+	user := &model.User{Email: email}
+	if err := user.FillUserByEmail(); err != nil {
+		return 0
+	}
+	if user.Id == 0 {
+		return 0
+	}
+
+	topUps, err := getSuccessfulTopUpsWithin(user.Id, considerStart.Unix(), now.Unix())
+	if err != nil {
+		common.SysLog(fmt.Sprintf("查询用户 %s 的加油包记录失败: %v", email, err))
+		return 0
+	}
+
+	return getTopUpExcludedQuotaByDay(email, topUps, now)
+}
+
+func getSuccessfulTopUpsWithin(userId int, startUnix int64, endUnix int64) ([]model.TopUp, error) {
+	var topUps []model.TopUp
+	err := model.DB.
+		Where("user_id = ? AND status = ? AND complete_time >= ? AND complete_time <= ?", userId, common.TopUpStatusSuccess, startUnix, endUnix).
+		Order("complete_time asc, id asc").
+		Find(&topUps).Error
+	return topUps, err
+}
+
+func getTopUpExcludedQuotaByDay(email string, topUps []model.TopUp, now time.Time) int64 {
+	if len(topUps) == 0 {
+		return 0
+	}
+
+	topUpsByDay := make(map[string][]model.TopUp)
+	for _, topUp := range topUps {
+		if topUp.CompleteTime <= 0 {
+			continue
+		}
+		dayKey := time.Unix(topUp.CompleteTime, 0).In(beijingLocation).Format("2006-01-02")
+		topUpsByDay[dayKey] = append(topUpsByDay[dayKey], topUp)
+	}
+
+	var excluded int64
+	for _, dayTopUps := range topUpsByDay {
+		excluded += getSingleDayTopUpExcludedQuota(email, dayTopUps, now)
+	}
+	return excluded
+}
+
+func getSingleDayTopUpExcludedQuota(email string, topUps []model.TopUp, now time.Time) int64 {
+	if len(topUps) == 0 {
+		return 0
+	}
+
+	dayStart := time.Unix(topUps[0].CompleteTime, 0).In(beijingLocation)
+	dayStart = time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), 0, 0, 0, 0, beijingLocation)
+	dayEnd := dayStart.Add(24 * time.Hour)
+	windowEnd := dayEnd
+	if now.Before(dayEnd) {
+		windowEnd = now
+	}
+	if !windowEnd.After(dayStart) {
+		return 0
+	}
+
+	consumeLogs, err := getUserConsumeLogsBetween(email, dayStart.Unix(), getExclusiveWindowEndUnix(windowEnd, dayEnd))
+	if err != nil {
+		common.SysLog(fmt.Sprintf("查询用户 %s 在 %s 的消费日志失败: %v", email, dayStart.Format("2006-01-02"), err))
+		return 0
+	}
+
+	type topUpPool struct {
+		availableAt int64
+		remaining   int64
+	}
+
+	pools := make([]topUpPool, 0, len(topUps))
+	for _, topUp := range topUps {
+		topUpQuota := getTopUpQuota(topUp)
+		if topUpQuota <= 0 {
+			continue
+		}
+		pools = append(pools, topUpPool{
+			availableAt: topUp.CompleteTime,
+			remaining:   topUpQuota,
+		})
+	}
+	if len(pools) == 0 {
+		return 0
+	}
+
+	var excluded int64
+	for _, consumeLog := range consumeLogs {
+		remainingConsume := int64(consumeLog.Quota)
+		if remainingConsume <= 0 {
+			continue
+		}
+		for idx := range pools {
+			pool := &pools[idx]
+			if pool.remaining <= 0 || pool.availableAt > consumeLog.CreatedAt {
+				continue
+			}
+			allocatable := remainingConsume
+			if allocatable > pool.remaining {
+				allocatable = pool.remaining
+			}
+			pool.remaining -= allocatable
+			remainingConsume -= allocatable
+			excluded += allocatable
+			if remainingConsume == 0 {
+				break
+			}
+		}
+	}
+	return excluded
+}
+
+func getExclusiveWindowEndUnix(windowEnd time.Time, naturalEnd time.Time) int64 {
+	if windowEnd.Equal(naturalEnd) {
+		return windowEnd.Unix() - 1
+	}
+	return windowEnd.Unix()
+}
+
+func getUserConsumeLogsBetween(email string, startUnix int64, endUnix int64) ([]model.Log, error) {
+	if startUnix == 0 || endUnix == 0 || endUnix < startUnix {
+		return nil, nil
+	}
+	var logs []model.Log
+	err := model.LOG_DB.
+		Where("type = ? AND token_name = ? AND created_at >= ? AND created_at <= ?", model.LogTypeConsume, email, startUnix, endUnix).
+		Order("created_at asc, id asc").
+		Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+func getTopUpQuota(topUp model.TopUp) int64 {
+	switch topUp.PaymentMethod {
+	case "creem":
+		if topUp.Amount <= 0 {
+			return 0
+		}
+		return topUp.Amount
+	case "stripe":
+		return int64(topUp.Money * common.QuotaPerUnit)
+	default:
+		if topUp.Amount > 0 {
+			return int64(float64(topUp.Amount) * common.QuotaPerUnit)
+		}
+		return int64(topUp.Money * common.QuotaPerUnit)
+	}
 }
 
 // updateTokenRemainQuota 更新 new-api 中对应 token 的 remain_quota
