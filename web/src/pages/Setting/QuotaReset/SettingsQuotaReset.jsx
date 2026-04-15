@@ -31,6 +31,7 @@ export default function SettingsQuotaReset(props) {
     WeeklyQuotaLimitEnabled: false,
     QuotaResetTime: '00:01',
     QuotaResetConcurrency: 3,
+    WeeklyQuotaMultiplier: 3,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -237,6 +238,17 @@ export default function SettingsQuotaReset(props) {
                 uncheckedText='〇'
                 onChange={(value) =>
                   setInputs({ ...inputs, WeeklyQuotaLimitEnabled: value })
+                }
+              />
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.InputNumber
+                field='WeeklyQuotaMultiplier'
+                label={t('周额度倍数')}
+                min={1}
+                extraText={t('日额度的倍数，用于计算周额度上限（周额度 = 日额度 × 该倍数）')}
+                onChange={(value) =>
+                  setInputs({ ...inputs, WeeklyQuotaMultiplier: value })
                 }
               />
             </Col>

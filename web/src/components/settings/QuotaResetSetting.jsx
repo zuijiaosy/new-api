@@ -9,6 +9,7 @@ const QuotaResetSetting = () => {
     WeeklyQuotaLimitEnabled: false,
     QuotaResetTime: '00:01',
     QuotaResetConcurrency: 3,
+    WeeklyQuotaMultiplier: 3,
   });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
@@ -24,7 +25,7 @@ const QuotaResetSetting = () => {
         if (item.key in inputs) {
           if (item.key === 'QuotaResetEnabled' || item.key === 'WeeklyQuotaLimitEnabled') {
             newInputs[item.key] = toBoolean(item.value);
-          } else if (item.key === 'QuotaResetConcurrency') {
+          } else if (item.key === 'QuotaResetConcurrency' || item.key === 'WeeklyQuotaMultiplier') {
             newInputs[item.key] = parseInt(item.value) || 3;
           } else {
             newInputs[item.key] = item.value;

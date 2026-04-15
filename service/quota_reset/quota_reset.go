@@ -127,6 +127,24 @@ func IsWeeklyQuotaLimitEnabled() bool {
 	return enabled == "true"
 }
 
+// GetWeeklyQuotaMultiplier 获取周额度倍数配置（日额度的倍数，默认 3，最小 1）
+func GetWeeklyQuotaMultiplier() int {
+	common.OptionMapRWMutex.RLock()
+	val, ok := common.OptionMap["WeeklyQuotaMultiplier"]
+	common.OptionMapRWMutex.RUnlock()
+	if !ok || val == "" {
+		return 3
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 1 {
+		return 3
+	}
+	return n
+}
+
+// weeklyQuotaMultiplierFn 可在测试中替换，用于 stub 倍数
+var weeklyQuotaMultiplierFn = GetWeeklyQuotaMultiplier
+
 // calculateNextRunTime 计算下次执行时间（北京时间）
 func calculateNextRunTime(timeStr string) time.Time {
 	now := time.Now().In(beijingLocation)
@@ -322,8 +340,8 @@ func processUser(user *CodexzhUser, weeklyLimitEnabled bool) processUserResult {
 // weeklyLimitEnabled: 周额度限制开关
 // 逻辑：
 // - 如果周额度限制未启用，直接使用 dailyQuota
-// - 如果 weeklyQuota 为 NULL 或 0，不限制，直接使用 dailyQuota
-// - 否则：min(dailyQuota, weeklyQuota - weeklyUsed)
+// - 否则：weeklyQuota = dailyQuota × WeeklyQuotaMultiplier
+//         todayQuota = min(dailyQuota, weeklyQuota - weeklyUsed)
 // - 如果周额度已用尽，返回 0
 func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 	dailyQuota := user.DailyQuota
@@ -336,14 +354,9 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 		return dailyQuota
 	}
 
-	// 如果没有设置周额度限制，直接使用日额度
-	if !user.HasWeeklyQuotaLimit() {
-		return dailyQuota
-	}
-
-	// 查询本周实际使用量（通过 token_name = email），每天上限为 dailyQuota
+	weeklyQuota := dailyQuota * int64(weeklyQuotaMultiplierFn())
 	weeklyUsed := getWeeklyUsedQuota(user)
-	weeklyRemain := *user.WeeklyQuota - weeklyUsed
+	weeklyRemain := weeklyQuota - weeklyUsed
 
 	// 周额度已用尽
 	if weeklyRemain <= 0 {
@@ -360,26 +373,19 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 // getWeeklyUsedQuota 查询用户本周计入周额度的已用额度
 //
 // 规则说明:
-// 1. 统计起点: 取 max(本周一 00:00, 用户续费日期 00:00)
-//   - subscriptionStart 为 NULL: 从本周一开始统计
-//   - subscriptionStart 在本周一之前: 从本周一开始统计
-//   - subscriptionStart 在本周一之后: 从 subscriptionStart 所在天的 00:00 开始统计
+// 1. 统计起点（considerStart）按优先级确定：
+//   - 本周内存在 orderType='subscription' 的 PAID 订单 → 取最早的 paidAt（精确时刻）
+//   - 找不到 → 查本周内已使用的激活码 → 取最早的 usedAt
+//   - 均无 → 本周一 00:00（北京时间）
 //
-// 2. 统计总消费后，扣除本周内加油包购买当日剩余时间的消费（每笔扣减不超过该笔加油包额度）
-// 3. 所有时间计算使用北京时间(UTC+8)，确保时区一致性
-//
-// 参数:
-//
-//	user: 用户对象，包含 Email、SubscriptionStart、DailyQuota
-//
-// 返回:
-//
-//	本周(或续费后)已使用的周额度总量
+// 2. 加油包排除：对窗口内每笔加油包订单（新：orderType='topup'，旧：name LIKE '%加油包%'）
+//   单独计算 [paidAt, 次日 00:00] 内的消耗，排除量 = min(消耗, creditTokens)
+// 3. 所有时间计算使用北京时间(UTC+8)
 func getWeeklyUsedQuota(user *CodexzhUser) int64 {
 	now := quotaResetNow().In(beijingLocation)
-	considerStart := getWeeklyConsiderStart(user, now)
+	considerStart := getWeeklyConsiderStart(user.Id, now)
 	totalConsumed := getUserConsumedQuotaBetween(user.Email, considerStart.Unix(), now.Unix())
-	excludedByTopUps := getWeeklyTopUpExcludedQuota(user.Email, considerStart, now)
+	excludedByTopUps := getWeeklyTopUpExcludedQuota(user.Id, user.Email, considerStart, now)
 
 	weeklyUsed := totalConsumed - excludedByTopUps
 	if weeklyUsed < 0 {
@@ -388,31 +394,31 @@ func getWeeklyUsedQuota(user *CodexzhUser) int64 {
 	return weeklyUsed
 }
 
-func getWeeklyConsiderStart(user *CodexzhUser, now time.Time) time.Time {
-	// 1. 计算本周一的开始时间（北京时间 00:00:00）
+// getWeeklyConsiderStart 确定本周额度统计起点（北京时间）
+// 优先级：订阅续购订单 paidAt → 激活码 usedAt → 本周一 00:00
+func getWeeklyConsiderStart(userId int64, now time.Time) time.Time {
+	// 计算本周一 00:00（北京时间）
 	weekday := now.Weekday()
 	if weekday == time.Sunday {
 		weekday = 7
 	}
-	daysToMonday := int(weekday) - 1
+	mondayDay := now.AddDate(0, 0, -(int(weekday) - 1))
+	mondayStart := time.Date(mondayDay.Year(), mondayDay.Month(), mondayDay.Day(), 0, 0, 0, 0, beijingLocation)
 
-	mondayStart := now.AddDate(0, 0, -daysToMonday)
-	mondayStart = time.Date(
-		mondayStart.Year(), mondayStart.Month(), mondayStart.Day(),
-		0, 0, 0, 0, beijingLocation,
-	)
-
-	considerStart := mondayStart
-	if user.SubscriptionStart != nil {
-		subStart := user.SubscriptionStart.In(beijingLocation)
-		if subStart.After(mondayStart) {
-			considerStart = time.Date(
-				subStart.Year(), subStart.Month(), subStart.Day(),
-				0, 0, 0, 0, beijingLocation,
-			)
-		}
+	// 1. 查本周内 orderType='subscription' 的 PAID 订单
+	subOrders, err := GetSubscriptionOrdersThisWeek(userId, mondayStart, now)
+	if err == nil && len(subOrders) > 0 && subOrders[0].PaidAt != nil {
+		return *subOrders[0].PaidAt
 	}
-	return considerStart
+
+	// 2. 查本周内已使用的激活码
+	codes, err := GetActivationCodesThisWeek(userId, mondayStart, now)
+	if err == nil && len(codes) > 0 && codes[0].UsedAt != nil {
+		return *codes[0].UsedAt
+	}
+
+	// 3. 默认从本周一开始
+	return mondayStart
 }
 
 func getUserConsumedQuotaBetween(email string, startUnix int64, endUnix int64) int64 {
@@ -436,163 +442,53 @@ func getUserConsumedQuotaBetween(email string, startUnix int64, endUnix int64) i
 	return int64(stat.Quota)
 }
 
-func getWeeklyTopUpExcludedQuota(email string, considerStart time.Time, now time.Time) int64 {
-	if !considerStart.Before(now) && !considerStart.Equal(now) {
+// getWeeklyTopUpExcludedQuota 计算本周加油包消耗中应排除的额度
+//
+// 对 [considerStart, now] 内每笔加油包订单（orderType='topup' 或旧订单 name LIKE '%加油包%'）：
+//   - 排除窗口：[paidAt, 次日北京时间 00:00]（超过 now 时截断至 now）
+//   - 单笔排除量：min(窗口内实际消耗, creditTokens)
+//
+// 旧订单（orderType IS NULL）无法识别续购类型，降级不排除；但 name LIKE '%加油包%' 的旧加油包仍可识别排除。
+func getWeeklyTopUpExcludedQuota(userId int64, email string, considerStart time.Time, now time.Time) int64 {
+	if !considerStart.Before(now) {
 		return 0
 	}
 
-	user := &model.User{Email: email}
-	if err := user.FillUserByEmail(); err != nil {
-		return 0
-	}
-	if user.Id == 0 {
-		return 0
-	}
-
-	topUps, err := getSuccessfulTopUpsWithin(user.Id, considerStart.Unix(), now.Unix())
+	orders, err := GetTopUpOrdersInWindow(userId, considerStart, now)
 	if err != nil {
-		common.SysLog(fmt.Sprintf("查询用户 %s 的加油包记录失败: %v", email, err))
+		common.SysLog(fmt.Sprintf("查询用户 %s 的加油包订单失败: %v", email, err))
 		return 0
 	}
-
-	return getTopUpExcludedQuotaByDay(email, topUps, now)
-}
-
-func getSuccessfulTopUpsWithin(userId int, startUnix int64, endUnix int64) ([]model.TopUp, error) {
-	var topUps []model.TopUp
-	err := model.DB.
-		Where("user_id = ? AND status = ? AND complete_time >= ? AND complete_time <= ?", userId, common.TopUpStatusSuccess, startUnix, endUnix).
-		Order("complete_time asc, id asc").
-		Find(&topUps).Error
-	return topUps, err
-}
-
-func getTopUpExcludedQuotaByDay(email string, topUps []model.TopUp, now time.Time) int64 {
-	if len(topUps) == 0 {
-		return 0
-	}
-
-	topUpsByDay := make(map[string][]model.TopUp)
-	for _, topUp := range topUps {
-		if topUp.CompleteTime <= 0 {
-			continue
-		}
-		dayKey := time.Unix(topUp.CompleteTime, 0).In(beijingLocation).Format("2006-01-02")
-		topUpsByDay[dayKey] = append(topUpsByDay[dayKey], topUp)
-	}
-
-	var excluded int64
-	for _, dayTopUps := range topUpsByDay {
-		excluded += getSingleDayTopUpExcludedQuota(email, dayTopUps, now)
-	}
-	return excluded
-}
-
-func getSingleDayTopUpExcludedQuota(email string, topUps []model.TopUp, now time.Time) int64 {
-	if len(topUps) == 0 {
-		return 0
-	}
-
-	dayStart := time.Unix(topUps[0].CompleteTime, 0).In(beijingLocation)
-	dayStart = time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), 0, 0, 0, 0, beijingLocation)
-	dayEnd := dayStart.Add(24 * time.Hour)
-	windowEnd := dayEnd
-	if now.Before(dayEnd) {
-		windowEnd = now
-	}
-	if !windowEnd.After(dayStart) {
-		return 0
-	}
-
-	consumeLogs, err := getUserConsumeLogsBetween(email, dayStart.Unix(), getExclusiveWindowEndUnix(windowEnd, dayEnd))
-	if err != nil {
-		common.SysLog(fmt.Sprintf("查询用户 %s 在 %s 的消费日志失败: %v", email, dayStart.Format("2006-01-02"), err))
-		return 0
-	}
-
-	type topUpPool struct {
-		availableAt int64
-		remaining   int64
-	}
-
-	pools := make([]topUpPool, 0, len(topUps))
-	for _, topUp := range topUps {
-		topUpQuota := getTopUpQuota(topUp)
-		if topUpQuota <= 0 {
-			continue
-		}
-		pools = append(pools, topUpPool{
-			availableAt: topUp.CompleteTime,
-			remaining:   topUpQuota,
-		})
-	}
-	if len(pools) == 0 {
+	if len(orders) == 0 {
 		return 0
 	}
 
 	var excluded int64
-	for _, consumeLog := range consumeLogs {
-		remainingConsume := int64(consumeLog.Quota)
-		if remainingConsume <= 0 {
+	for _, order := range orders {
+		if order.PaidAt == nil {
 			continue
 		}
-		for idx := range pools {
-			pool := &pools[idx]
-			if pool.remaining <= 0 || pool.availableAt > consumeLog.CreatedAt {
-				continue
-			}
-			allocatable := remainingConsume
-			if allocatable > pool.remaining {
-				allocatable = pool.remaining
-			}
-			pool.remaining -= allocatable
-			remainingConsume -= allocatable
-			excluded += allocatable
-			if remainingConsume == 0 {
-				break
-			}
+		creditTokens := ParseParamCreditTokens(order.Param)
+		if creditTokens <= 0 {
+			continue
+		}
+
+		// 窗口：[paidAt, 次日北京时间 00:00]，超过 now 截断
+		paidAtBj := order.PaidAt.In(beijingLocation)
+		nextDayBj := time.Date(paidAtBj.Year(), paidAtBj.Month(), paidAtBj.Day()+1, 0, 0, 0, 0, beijingLocation)
+		windowEnd := nextDayBj
+		if now.Before(nextDayBj) {
+			windowEnd = now
+		}
+
+		consumed := getUserConsumedQuotaBetween(email, order.PaidAt.Unix(), windowEnd.Unix())
+		if consumed > creditTokens {
+			excluded += creditTokens
+		} else {
+			excluded += consumed
 		}
 	}
 	return excluded
-}
-
-func getExclusiveWindowEndUnix(windowEnd time.Time, naturalEnd time.Time) int64 {
-	if windowEnd.Equal(naturalEnd) {
-		return windowEnd.Unix() - 1
-	}
-	return windowEnd.Unix()
-}
-
-func getUserConsumeLogsBetween(email string, startUnix int64, endUnix int64) ([]model.Log, error) {
-	if startUnix == 0 || endUnix == 0 || endUnix < startUnix {
-		return nil, nil
-	}
-	var logs []model.Log
-	err := model.LOG_DB.
-		Where("type = ? AND token_name = ? AND created_at >= ? AND created_at <= ?", model.LogTypeConsume, email, startUnix, endUnix).
-		Order("created_at asc, id asc").
-		Find(&logs).Error
-	if err != nil {
-		return nil, err
-	}
-	return logs, nil
-}
-
-func getTopUpQuota(topUp model.TopUp) int64 {
-	switch topUp.PaymentMethod {
-	case "creem":
-		if topUp.Amount <= 0 {
-			return 0
-		}
-		return topUp.Amount
-	case "stripe":
-		return int64(topUp.Money * common.QuotaPerUnit)
-	default:
-		if topUp.Amount > 0 {
-			return int64(float64(topUp.Amount) * common.QuotaPerUnit)
-		}
-		return int64(topUp.Money * common.QuotaPerUnit)
-	}
 }
 
 // updateTokenRemainQuota 更新 new-api 中对应 token 的 remain_quota

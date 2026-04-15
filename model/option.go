@@ -156,6 +156,7 @@ func InitOptionMap() {
 	common.OptionMap["QuotaResetTime"] = "00:01"
 	common.OptionMap["QuotaResetConcurrency"] = "3"
 	common.OptionMap["WeeklyQuotaLimitEnabled"] = "false" // 周额度限制开关，默认关闭
+	common.OptionMap["WeeklyQuotaMultiplier"] = "3"      // 周额度倍数（日额度的倍数），默认 3
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()

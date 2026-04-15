@@ -2,6 +2,8 @@ package quota_reset
 
 import (
 	"time"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // CodexzhUser codexzh 系统的用户模型
@@ -13,7 +15,6 @@ type CodexzhUser struct {
 	SubscriptionStart *time.Time `gorm:"column:subscriptionStart"`
 	SubscriptionEnd   *time.Time `gorm:"column:subscriptionEnd"`
 	DailyQuota        int64      `gorm:"column:dailyQuota;default:45000000"`
-	WeeklyQuota       *int64     `gorm:"column:weeklyQuota"`
 }
 
 // TableName 返回实际的表名
@@ -55,12 +56,6 @@ func (u *CodexzhUser) IsDayPass() bool {
 	return durationHours <= 48
 }
 
-// HasWeeklyQuotaLimit 检查用户是否有周额度限制
-// 如果 weeklyQuota 为 NULL 或 0，则表示不限制
-func (u *CodexzhUser) HasWeeklyQuotaLimit() bool {
-	return u.WeeklyQuota != nil && *u.WeeklyQuota > 0
-}
-
 // MaskEmail 返回脱敏后的邮箱地址
 // 例如：user@example.com -> us***@example.com
 func (u *CodexzhUser) MaskEmail() string {
@@ -79,4 +74,83 @@ func (u *CodexzhUser) MaskEmail() string {
 		return email[:2] + "***"
 	}
 	return email[:2] + "***" + email[atIndex:]
+}
+
+// ──────────────────────────────────────────────
+// 支付订单 & 激活码（周额度计算专用）
+// ──────────────────────────────────────────────
+
+// CodexzhPaymentOrder 支付订单（对应 codexzh PostgreSQL payment_orders 表）
+type CodexzhPaymentOrder struct {
+	Id        int64      `gorm:"column:id;primaryKey"`
+	UserId    int64      `gorm:"column:userId"`
+	Name      string     `gorm:"column:name"`
+	Status    string     `gorm:"column:status"`
+	OrderType *string    `gorm:"column:orderType"`
+	PlanId    *int64     `gorm:"column:planId"`
+	PaidAt    *time.Time `gorm:"column:paidAt"`
+	Param     *string    `gorm:"column:param"`
+}
+
+func (CodexzhPaymentOrder) TableName() string { return "payment_orders" }
+
+// CodexzhActivationCode 激活码（对应 codexzh PostgreSQL activation_codes 表）
+type CodexzhActivationCode struct {
+	Id     int64      `gorm:"column:id;primaryKey"`
+	UserId *int64     `gorm:"column:userId"`
+	Status string     `gorm:"column:status"`
+	UsedAt *time.Time `gorm:"column:usedAt"`
+}
+
+func (CodexzhActivationCode) TableName() string { return "activation_codes" }
+
+// GetSubscriptionOrdersThisWeek 查询本周内的套餐续购订单（orderType='subscription'，到期重购）
+// start/end 均为北京时间，GORM 会自动转换为数据库期望的格式
+func GetSubscriptionOrdersThisWeek(userId int64, start, end time.Time) ([]CodexzhPaymentOrder, error) {
+	var orders []CodexzhPaymentOrder
+	err := CodexzhDB.
+		Where(`"userId" = ? AND "orderType" = 'subscription' AND status = 'PAID' AND "paidAt" >= ? AND "paidAt" <= ?`,
+			userId, start, end).
+		Order(`"paidAt" ASC`).
+		Find(&orders).Error
+	return orders, err
+}
+
+// GetTopUpOrdersInWindow 查询指定时间窗口内的加油包订单
+// 新订单：orderType = 'topup'；旧订单降级：orderType IS NULL AND name LIKE '%加油包%'
+func GetTopUpOrdersInWindow(userId int64, start, end time.Time) ([]CodexzhPaymentOrder, error) {
+	var orders []CodexzhPaymentOrder
+	err := CodexzhDB.
+		Where(`"userId" = ? AND status = 'PAID' AND "paidAt" >= ? AND "paidAt" <= ? AND ("orderType" = 'topup' OR ("orderType" IS NULL AND name LIKE ?))`,
+			userId, start, end, "%加油包%").
+		Order(`"paidAt" ASC`).
+		Find(&orders).Error
+	return orders, err
+}
+
+// GetActivationCodesThisWeek 查询本周内已使用的激活码
+func GetActivationCodesThisWeek(userId int64, start, end time.Time) ([]CodexzhActivationCode, error) {
+	var codes []CodexzhActivationCode
+	err := CodexzhDB.
+		Where(`"userId" = ? AND status = 'used' AND "usedAt" >= ? AND "usedAt" <= ?`,
+			userId, start, end).
+		Order(`"usedAt" ASC`).
+		Find(&codes).Error
+	return codes, err
+}
+
+// ParseParamCreditTokens 从支付订单的 param JSON 中解析加油包额度（creditTokens 字段）
+// param 格式示例：{"productType":"topup","creditUsd":50,"creditTokens":25000000}
+// 解析失败或字段缺失时返回 0
+func ParseParamCreditTokens(param *string) int64 {
+	if param == nil || *param == "" {
+		return 0
+	}
+	var data struct {
+		CreditTokens int64 `json:"creditTokens"`
+	}
+	if err := common.UnmarshalJsonStr(*param, &data); err != nil {
+		return 0
+	}
+	return data.CreditTokens
 }
