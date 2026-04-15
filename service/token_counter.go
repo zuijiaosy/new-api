@@ -113,7 +113,10 @@ func getImageToken(c *gin.Context, fileMeta *types.FileMeta, model string, strea
 
 	width := config.Width
 	height := config.Height
-	log.Printf("format: %s, width: %d, height: %d", format, width, height)
+	// 仅调试模式打印图片尺寸信息
+	if common.DebugEnabled {
+		log.Printf("format: %s, width: %d, height: %d", format, width, height)
+	}
 
 	if isPatchBased {
 		// 32x32 patch-based calculation with 1536 cap and model multiplier

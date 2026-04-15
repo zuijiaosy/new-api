@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,10 @@ func RouteTag(tag string) gin.HandlerFunc {
 }
 
 func SetUpLogger(server *gin.Engine) {
+	// GIN_LOG_ENABLED=false 时关闭访问日志
+	if os.Getenv("GIN_LOG_ENABLED") == "false" {
+		return
+	}
 	server.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		var requestID string
 		if param.Keys != nil {
