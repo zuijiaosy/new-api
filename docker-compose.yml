@@ -21,6 +21,7 @@ services:
       - RESPONSE_CONTENT_REPLACEMENTS=packy_api:new_api,cc-azu-sale:cc
       - GIN_MODE=release           # 减少 Gin 框架的 HTTP 日志
       - INFO_LOG_ENABLED=false     # 关闭业务 INFO 日志（新增）
+      - NODE_NAME=codex-new-api-node-1  # 节点名称，用于审计日志中标识节点身份；多节点/容器部署时建议设置
     # 严格限制日志大小
     logging:
       driver: "json-file"

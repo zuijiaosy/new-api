@@ -76,6 +76,7 @@ const (
 	MsgUserInputInvalid              = "user.input_invalid"
 	MsgUserNoPermissionSameLevel     = "user.no_permission_same_level"
 	MsgUserNoPermissionHigherLevel   = "user.no_permission_higher_level"
+	MsgUserQuotaChangeZero           = "user.quota_change_zero"
 	MsgUserCannotCreateHigherLevel   = "user.cannot_create_higher_level"
 	MsgUserCannotDeleteRootUser      = "user.cannot_delete_root_user"
 	MsgUserCannotDisableRootUser     = "user.cannot_disable_root_user"

@@ -85,6 +85,7 @@ func InitEnv() {
 	RequestLogEnabled = os.Getenv("REQUEST_LOG_ENABLED") == "false"
 	InfoLogEnabled = os.Getenv("INFO_LOG_ENABLED") != "false" // 默认开启，设置为 false 才关闭
 	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
+	NodeName = os.Getenv("NODE_NAME")
 	TLSInsecureSkipVerify = GetEnvOrDefaultBool("TLS_INSECURE_SKIP_VERIFY", false)
 	if TLSInsecureSkipVerify {
 		if tr, ok := http.DefaultTransport.(*http.Transport); ok && tr != nil {
