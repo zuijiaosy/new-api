@@ -24,6 +24,7 @@ var quotaResetNow = func() time.Time {
 // QuotaResetLog 额度重置执行日志
 type QuotaResetLog struct {
 	ExecutedAt     time.Time `json:"executed_at"`
+	ResetType      string    `json:"reset_type"`
 	TotalUsers     int       `json:"total_users"`
 	SuccessCount   int       `json:"success_count"`
 	FailedCount    int       `json:"failed_count"`
@@ -65,8 +66,11 @@ func StartQuotaResetScheduler() {
 
 		time.Sleep(sleepDuration)
 
+		dailyResetEnabled := IsQuotaResetEnabled()
+		weeklyLimitEnabled := IsWeeklyQuotaLimitEnabled()
+
 		// 检查是否启用
-		if !IsQuotaResetEnabled() {
+		if !shouldRunQuotaReset(dailyResetEnabled, weeklyLimitEnabled) {
 			common.SysLog("额度重置功能已禁用，跳过本次执行")
 			continue
 		}
@@ -96,6 +100,10 @@ func IsQuotaResetEnabled() bool {
 		return false
 	}
 	return enabled == "true"
+}
+
+func shouldRunQuotaReset(dailyResetEnabled bool, weeklyLimitEnabled bool) bool {
+	return dailyResetEnabled || weeklyLimitEnabled
 }
 
 // GetQuotaResetConcurrency 获取并发数配置
@@ -145,6 +153,30 @@ func GetWeeklyQuotaMultiplier() int {
 // weeklyQuotaMultiplierFn 可在测试中替换，用于 stub 倍数
 var weeklyQuotaMultiplierFn = GetWeeklyQuotaMultiplier
 
+// GetWeeklyQuotaResetAt 获取最近一次手动周额度重置时间戳
+func GetWeeklyQuotaResetAt() int64 {
+	common.OptionMapRWMutex.RLock()
+	val, ok := common.OptionMap["WeeklyQuotaResetAt"]
+	common.OptionMapRWMutex.RUnlock()
+	if !ok || val == "" {
+		return 0
+	}
+	ts, err := strconv.ParseInt(val, 10, 64)
+	if err != nil || ts < 0 {
+		return 0
+	}
+	return ts
+}
+
+func setWeeklyQuotaResetAt(ts int64) error {
+	if ts < 0 {
+		ts = 0
+	}
+	return model.UpdateOption("WeeklyQuotaResetAt", strconv.FormatInt(ts, 10))
+}
+
+var weeklyQuotaResetAtFn = GetWeeklyQuotaResetAt
+
 // calculateNextRunTime 计算下次执行时间（北京时间）
 func calculateNextRunTime(timeStr string) time.Time {
 	now := time.Now().In(beijingLocation)
@@ -179,17 +211,25 @@ func ExecuteQuotaReset() (logEntry *QuotaResetLog) {
 	}
 	defer atomic.StoreInt32(&isRunning, 0)
 
-	return executeQuotaResetInternal()
+	dailyResetEnabled := IsQuotaResetEnabled()
+	weeklyLimitEnabled := IsWeeklyQuotaLimitEnabled()
+	if !shouldRunQuotaReset(dailyResetEnabled, weeklyLimitEnabled) {
+		common.SysLog("额度重置功能已禁用，跳过本次执行")
+		return nil
+	}
+
+	return executeQuotaResetInternal("scheduled", dailyResetEnabled, weeklyLimitEnabled)
 }
 
 // executeQuotaResetInternal 执行额度重置的内部实现
 // 调用方需要自行处理 isRunning 锁
-func executeQuotaResetInternal() (logEntry *QuotaResetLog) {
+func executeQuotaResetInternal(resetType string, dailyResetEnabled bool, weeklyLimitEnabled bool) (logEntry *QuotaResetLog) {
 	startTime := time.Now()
 	common.SysLog("开始执行额度重置任务...")
 
 	logEntry = &QuotaResetLog{
 		ExecutedAt:    startTime.In(beijingLocation),
+		ResetType:     resetType,
 		ErrorMessages: make([]string, 0),
 	}
 
@@ -231,9 +271,6 @@ func executeQuotaResetInternal() (logEntry *QuotaResetLog) {
 	logEntry.TotalUsers = len(users)
 	common.SysLog(fmt.Sprintf("找到 %d 个活跃用户", len(users)))
 
-	// 3. 获取周额度限制开关状态
-	weeklyLimitEnabled := IsWeeklyQuotaLimitEnabled()
-
 	// 4. 获取并发数
 	concurrency := GetQuotaResetConcurrency()
 	common.SysLog(fmt.Sprintf("使用并发数: %d", concurrency))
@@ -265,7 +302,7 @@ func executeQuotaResetInternal() (logEntry *QuotaResetLog) {
 						common.SysLog(fmt.Sprintf("处理用户 %s 发生 panic: %v", u.MaskEmail(), r))
 					}
 				}()
-				result = processUser(&u, weeklyLimitEnabled)
+				result = processUser(&u, dailyResetEnabled, weeklyLimitEnabled)
 			}()
 
 			switch result.Status {
@@ -311,8 +348,14 @@ type processUserResult struct {
 
 // processUser 处理单个用户的额度重置
 // weeklyLimitEnabled: 周额度限制开关
-func processUser(user *CodexzhUser, weeklyLimitEnabled bool) processUserResult {
+func processUser(user *CodexzhUser, dailyResetEnabled bool, weeklyLimitEnabled bool) processUserResult {
 	result := processUserResult{}
+
+	// 0. 防御性兜底：两个开关都关闭时不应进入此函数，直接跳过避免误将 token 刷成 0
+	if !shouldRunQuotaReset(dailyResetEnabled, weeklyLimitEnabled) {
+		result.Status = "skipped_day_card"
+		return result
+	}
 
 	// 1. 跳过天卡用户（不参与每日额度重置）
 	if user.IsDayPass() {
@@ -321,7 +364,7 @@ func processUser(user *CodexzhUser, weeklyLimitEnabled bool) processUserResult {
 	}
 
 	// 2. 计算今日可分配额度（根据开关决定是否考虑周额度）
-	todayQuota := calculateTodayQuota(user, weeklyLimitEnabled)
+	todayQuota := calculateQuotaForReset(user, dailyResetEnabled, weeklyLimitEnabled)
 
 	// 3. 更新 new-api 的 token.remain_quota
 	err := updateTokenRemainQuota(user.Email, todayQuota)
@@ -339,11 +382,15 @@ func processUser(user *CodexzhUser, weeklyLimitEnabled bool) processUserResult {
 // calculateTodayQuota 计算今日可分配额度
 // weeklyLimitEnabled: 周额度限制开关
 // 逻辑：
-// - 如果周额度限制未启用，直接使用 dailyQuota
-// - 否则：weeklyQuota = dailyQuota × WeeklyQuotaMultiplier
-//         todayQuota = min(dailyQuota, weeklyQuota - weeklyUsed)
-// - 如果周额度已用尽，返回 0
+//   - 如果周额度限制未启用，直接使用 dailyQuota
+//   - 否则：weeklyQuota = dailyQuota × WeeklyQuotaMultiplier
+//     todayQuota = min(dailyQuota, weeklyQuota - weeklyUsed)
+//   - 如果周额度已用尽，返回 0
 func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
+	return calculateQuotaForReset(user, true, weeklyLimitEnabled)
+}
+
+func calculateQuotaForReset(user *CodexzhUser, dailyResetEnabled bool, weeklyLimitEnabled bool) int64 {
 	dailyQuota := user.DailyQuota
 	if dailyQuota < 0 {
 		return 0
@@ -351,7 +398,10 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 
 	// 如果周额度限制未启用，直接使用日额度
 	if !weeklyLimitEnabled {
-		return dailyQuota
+		if dailyResetEnabled {
+			return dailyQuota
+		}
+		return 0
 	}
 
 	weeklyQuota := dailyQuota * int64(weeklyQuotaMultiplierFn())
@@ -361,6 +411,10 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 	// 周额度已用尽
 	if weeklyRemain <= 0 {
 		return 0
+	}
+
+	if !dailyResetEnabled {
+		return weeklyRemain
 	}
 
 	// 返回 min(dailyQuota, weeklyRemain)
@@ -374,13 +428,16 @@ func calculateTodayQuota(user *CodexzhUser, weeklyLimitEnabled bool) int64 {
 //
 // 规则说明:
 // 1. 统计起点（considerStart）按优先级确定：
+//
 //   - 本周内存在 orderType='subscription' 的 PAID 订单 → 取最早的 paidAt（精确时刻）
+//
 //   - 找不到 → 查本周内已使用的激活码 → 取最早的 usedAt
+//
 //   - 均无 → 本周一 00:00（北京时间）
 //
-// 2. 加油包排除：对窗口内每笔加油包订单（新：orderType='topup'，旧：name LIKE '%加油包%'）
-//   单独计算 [paidAt, 次日 00:00] 内的消耗，排除量 = min(消耗, creditTokens)
-// 3. 所有时间计算使用北京时间(UTC+8)
+//     2. 加油包排除：对窗口内每笔加油包订单（新：orderType='topup'，旧：name LIKE '%加油包%'）
+//     单独计算 [paidAt, 次日 00:00] 内的消耗，排除量 = min(消耗, creditTokens)
+//     3. 所有时间计算使用北京时间(UTC+8)
 func getWeeklyUsedQuota(user *CodexzhUser) int64 {
 	now := quotaResetNow().In(beijingLocation)
 	considerStart := getWeeklyConsiderStart(user.Id, now)
@@ -404,21 +461,29 @@ func getWeeklyConsiderStart(userId int64, now time.Time) time.Time {
 	}
 	mondayDay := now.AddDate(0, 0, -(int(weekday) - 1))
 	mondayStart := time.Date(mondayDay.Year(), mondayDay.Month(), mondayDay.Day(), 0, 0, 0, 0, beijingLocation)
+	considerStart := mondayStart
+
+	if resetAt := weeklyQuotaResetAtFn(); resetAt > 0 {
+		resetTime := time.Unix(resetAt, 0).In(beijingLocation)
+		if resetTime.After(considerStart) && !resetTime.After(now) {
+			considerStart = resetTime
+		}
+	}
 
 	// 1. 查本周内 orderType='subscription' 的 PAID 订单
-	subOrders, err := GetSubscriptionOrdersThisWeek(userId, mondayStart, now)
+	subOrders, err := GetSubscriptionOrdersThisWeek(userId, considerStart, now)
 	if err == nil && len(subOrders) > 0 && subOrders[0].PaidAt != nil {
 		return *subOrders[0].PaidAt
 	}
 
 	// 2. 查本周内已使用的激活码
-	codes, err := GetActivationCodesThisWeek(userId, mondayStart, now)
+	codes, err := GetActivationCodesThisWeek(userId, considerStart, now)
 	if err == nil && len(codes) > 0 && codes[0].UsedAt != nil {
 		return *codes[0].UsedAt
 	}
 
-	// 3. 默认从本周一开始
-	return mondayStart
+	// 3. 默认从本周一或最近一次手动周重置开始
+	return considerStart
 }
 
 func getUserConsumedQuotaBetween(email string, startUnix int64, endUnix int64) int64 {
@@ -586,6 +651,14 @@ func IsQuotaResetRunning() bool {
 // 使用原子操作获取锁，成功后异步执行任务
 // 返回 true 表示成功启动，false 表示任务已在运行
 func TryStartQuotaReset() bool {
+	// 手动触发需遵循与定时任务一致的模式矩阵：读取真实开关，若两者均关闭则不启动
+	dailyResetEnabled := IsQuotaResetEnabled()
+	weeklyLimitEnabled := IsWeeklyQuotaLimitEnabled()
+	if !shouldRunQuotaReset(dailyResetEnabled, weeklyLimitEnabled) {
+		common.SysLog("额度重置功能已禁用，跳过手动触发")
+		return false
+	}
+
 	// 原子操作尝试获取锁
 	if !atomic.CompareAndSwapInt32(&isRunning, 0, 1) {
 		return false
@@ -599,7 +672,62 @@ func TryStartQuotaReset() bool {
 				common.SysLog(fmt.Sprintf("手动触发额度重置发生 panic: %v", r))
 			}
 		}()
-		executeQuotaResetInternal()
+		executeQuotaResetInternal("manual_daily_reset", dailyResetEnabled, weeklyLimitEnabled)
+	}()
+
+	return true
+}
+
+// ExecuteManualWeeklyQuotaReset 手动重置全站活跃用户周额度。
+func ExecuteManualWeeklyQuotaReset() (logEntry *QuotaResetLog) {
+	startTime := time.Now()
+
+	// 防御性检查：周额度限制必须开启，避免外部直接调用误刷
+	if !IsWeeklyQuotaLimitEnabled() {
+		errMsg := "周额度限制未启用，手动周额度重置已跳过"
+		common.SysLog(errMsg)
+		entry := &QuotaResetLog{
+			ExecutedAt:    startTime.In(beijingLocation),
+			ResetType:     "manual_weekly_reset",
+			FailedCount:   1,
+			Duration:      time.Since(startTime).String(),
+			ErrorMessages: []string{errMsg},
+		}
+		addLog(entry)
+		return entry
+	}
+
+	resetAt := quotaResetNow().In(beijingLocation).Unix()
+	if err := setWeeklyQuotaResetAt(resetAt); err != nil {
+		errMsg := "更新周额度重置时间失败: " + err.Error()
+		common.SysLog(errMsg)
+		entry := &QuotaResetLog{
+			ExecutedAt:    startTime.In(beijingLocation),
+			ResetType:     "manual_weekly_reset",
+			FailedCount:   1,
+			Duration:      time.Since(startTime).String(),
+			ErrorMessages: []string{errMsg},
+		}
+		addLog(entry)
+		return entry
+	}
+	return executeQuotaResetInternal("manual_weekly_reset", false, true)
+}
+
+// TryStartManualWeeklyQuotaReset 尝试异步启动手动周额度重置。
+func TryStartManualWeeklyQuotaReset() bool {
+	if !atomic.CompareAndSwapInt32(&isRunning, 0, 1) {
+		return false
+	}
+
+	go func() {
+		defer atomic.StoreInt32(&isRunning, 0)
+		defer func() {
+			if r := recover(); r != nil {
+				common.SysLog(fmt.Sprintf("手动周额度重置发生 panic: %v", r))
+			}
+		}()
+		ExecuteManualWeeklyQuotaReset()
 	}()
 
 	return true

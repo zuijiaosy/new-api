@@ -218,7 +218,7 @@ func TestGetWeeklyUsedQuota_MultipleActivationCodes_TakesEarliest(t *testing.T) 
 	seedActivationCode(t, 1, 1, bjTime(2026, 4, 15, 14, 0, 0))
 	seedActivationCode(t, 2, 1, bjTime(2026, 4, 15, 9, 0, 0))
 
-	seedConsumeLog(t, user.Email, bjTime(2026, 4, 15, 8, 0, 0), 50) // 最早激活码前，不计入
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 15, 8, 0, 0), 50)  // 最早激活码前，不计入
 	seedConsumeLog(t, user.Email, bjTime(2026, 4, 15, 10, 0, 0), 30) // 09:00 之后，计入
 
 	// considerStart = Apr 15 09:00（取最早的激活码 usedAt）
@@ -279,6 +279,110 @@ func TestCalculateTodayQuota_WeeklyExhausted_ReturnsZero(t *testing.T) {
 	assert.Equal(t, int64(0), calculateTodayQuota(user, true))
 }
 
+func TestShouldRunQuotaReset_WhenEitherDailyOrWeeklyEnabled(t *testing.T) {
+	assert.False(t, shouldRunQuotaReset(false, false))
+	assert.True(t, shouldRunQuotaReset(true, false))
+	assert.True(t, shouldRunQuotaReset(false, true))
+	assert.True(t, shouldRunQuotaReset(true, true))
+}
+
+func TestCalculateQuotaForReset_WeeklyOnlyReturnsWeeklyRemain(t *testing.T) {
+	setupQuotaResetTestDB(t)
+
+	now := bjTime(2026, 4, 16, 23, 0, 0)
+	restoreNow := stubQuotaResetNow(now)
+	defer restoreNow()
+	restoreMul := stubWeeklyMultiplier(3) // weeklyQuota = 60 × 3 = 180
+	defer restoreMul()
+
+	user := &CodexzhUser{Id: 1, Email: "user@example.com", DailyQuota: 60}
+	seedNewAPIUser(t, 1, user.Email)
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 14, 10, 0, 0), 50)
+
+	assert.Equal(t, int64(130), calculateQuotaForReset(user, false, true))
+}
+
+func TestCalculateQuotaForReset_WeeklyOnlyExhaustedReturnsZero(t *testing.T) {
+	setupQuotaResetTestDB(t)
+
+	now := bjTime(2026, 4, 16, 23, 0, 0)
+	restoreNow := stubQuotaResetNow(now)
+	defer restoreNow()
+	restoreMul := stubWeeklyMultiplier(2) // weeklyQuota = 120
+	defer restoreMul()
+
+	user := &CodexzhUser{Id: 1, Email: "user@example.com", DailyQuota: 60}
+	seedNewAPIUser(t, 1, user.Email)
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 14, 10, 0, 0), 80)
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 15, 10, 0, 0), 50)
+
+	assert.Equal(t, int64(0), calculateQuotaForReset(user, false, true))
+}
+
+func TestGetWeeklyUsedQuota_ManualWeeklyResetBaselineExcludesEarlierLogs(t *testing.T) {
+	setupQuotaResetTestDB(t)
+
+	now := bjTime(2026, 4, 16, 23, 0, 0)
+	restoreNow := stubQuotaResetNow(now)
+	defer restoreNow()
+	restoreWeeklyResetAt := stubWeeklyResetAt(bjTime(2026, 4, 16, 12, 0, 0).Unix())
+	defer restoreWeeklyResetAt()
+
+	user := CodexzhUser{Id: 1, Email: "user@example.com", DailyQuota: 100}
+	seedNewAPIUser(t, 1, user.Email)
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 15, 10, 0, 0), 70)
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 16, 13, 0, 0), 30)
+
+	assert.Equal(t, int64(30), getWeeklyUsedQuota(&user))
+}
+
+func TestExecuteManualWeeklyQuotaReset_UpdatesBaselineAndTokenQuotaImmediately(t *testing.T) {
+	setupQuotaResetTestDB(t)
+
+	now := bjTime(2026, 4, 16, 23, 0, 0)
+	restoreNow := stubQuotaResetNow(now)
+	defer restoreNow()
+	restoreMul := stubWeeklyMultiplier(3) // weeklyQuota = 180
+	defer restoreMul()
+	common.OptionMap["WeeklyQuotaLimitEnabled"] = "true"
+
+	user := seedActiveCodexzhUser(t, 1, "user@example.com", 60, bjTime(2026, 4, 1, 0, 0, 0), bjTime(2026, 5, 1, 0, 0, 0))
+	seedToken(t, 1, user.Email, 5)
+	seedConsumeLog(t, user.Email, bjTime(2026, 4, 14, 10, 0, 0), 100)
+
+	logEntry := ExecuteManualWeeklyQuotaReset()
+	require.NotNil(t, logEntry)
+	assert.Equal(t, 1, logEntry.SuccessCount)
+	assert.Equal(t, "manual_weekly_reset", logEntry.ResetType)
+	assert.Equal(t, now.Unix(), GetWeeklyQuotaResetAt())
+
+	var token model.Token
+	require.NoError(t, model.DB.Where("name = ?", user.Email).First(&token).Error)
+	assert.Equal(t, 180, token.RemainQuota)
+}
+
+func TestExecuteManualWeeklyQuotaReset_SkipsWhenWeeklyDisabled(t *testing.T) {
+	setupQuotaResetTestDB(t)
+
+	now := bjTime(2026, 4, 16, 23, 0, 0)
+	restoreNow := stubQuotaResetNow(now)
+	defer restoreNow()
+	// 明确保持 WeeklyQuotaLimitEnabled=false
+
+	logEntry := ExecuteManualWeeklyQuotaReset()
+	require.NotNil(t, logEntry)
+	assert.Equal(t, "manual_weekly_reset", logEntry.ResetType)
+	assert.Equal(t, 1, logEntry.FailedCount)
+	assert.Equal(t, 0, logEntry.SuccessCount)
+	assert.Equal(t, int64(0), GetWeeklyQuotaResetAt(), "周开关关闭时不应更新 WeeklyQuotaResetAt")
+
+	// 失败日志需被 addLog 持久化到内存
+	logs := GetQuotaResetLogs(10)
+	require.NotEmpty(t, logs)
+	assert.Equal(t, "manual_weekly_reset", logs[0].ResetType)
+	assert.Equal(t, 1, logs[0].FailedCount)
+}
+
 // ──────────────────────────────────────────────
 // 测试基础设施
 // ──────────────────────────────────────────────
@@ -297,26 +401,44 @@ func setupQuotaResetTestDB(t *testing.T) {
 	oldLogDB := model.LOG_DB
 	oldCodexzhDB := CodexzhDB
 	oldUsingSQLite := common.UsingSQLite
+	oldOptionMap := common.OptionMap
+	oldRedisEnabled := common.RedisEnabled
 
 	model.DB = db
 	model.LOG_DB = db
 	CodexzhDB = db
 	common.UsingSQLite = true
 	common.LogConsumeEnabled = true
+	common.RedisEnabled = false
+	common.OptionMap = map[string]string{
+		"QuotaResetConcurrency":   "3",
+		"WeeklyQuotaMultiplier":   "3",
+		"WeeklyQuotaResetAt":      "0",
+		"QuotaResetEnabled":       "false",
+		"WeeklyQuotaLimitEnabled": "false",
+	}
 
 	t.Cleanup(func() {
 		model.DB = oldDB
 		model.LOG_DB = oldLogDB
 		CodexzhDB = oldCodexzhDB
 		common.UsingSQLite = oldUsingSQLite
+		common.OptionMap = oldOptionMap
+		common.RedisEnabled = oldRedisEnabled
 	})
 
 	require.NoError(t, db.AutoMigrate(
+		&model.Option{},
 		&model.User{},
+		&model.Token{},
 		&model.Log{},
 		&CodexzhPaymentOrder{},
 		&CodexzhActivationCode{},
 	))
+	require.NoError(t, db.Exec(`ALTER TABLE users ADD COLUMN apiKey text`).Error)
+	require.NoError(t, db.Exec(`ALTER TABLE users ADD COLUMN subscriptionStart datetime`).Error)
+	require.NoError(t, db.Exec(`ALTER TABLE users ADD COLUMN subscriptionEnd datetime`).Error)
+	require.NoError(t, db.Exec(`ALTER TABLE users ADD COLUMN dailyQuota integer`).Error)
 }
 
 func seedNewAPIUser(t *testing.T, id int, email string) {
@@ -327,6 +449,51 @@ func seedNewAPIUser(t *testing.T, id int, email string) {
 		Email:    email,
 		Status:   common.UserStatusEnabled,
 		Password: "test-password",
+	}).Error)
+}
+
+func seedActiveCodexzhUser(t *testing.T, id int64, email string, dailyQuota int64, start time.Time, end time.Time) CodexzhUser {
+	t.Helper()
+	apiKey := "active-api-key"
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:       int(id),
+		Username: fmt.Sprintf("user_%d", id),
+		Email:    email,
+		Status:   common.UserStatusEnabled,
+		Password: "test-password",
+	}).Error)
+	require.NoError(t, model.DB.Table("users").Where("id = ?", id).Updates(map[string]interface{}{
+		"apiKey":            apiKey,
+		"subscriptionStart": start,
+		"subscriptionEnd":   end,
+		"dailyQuota":        dailyQuota,
+	}).Error)
+	user := CodexzhUser{
+		Id:                id,
+		Email:             email,
+		ApiKey:            &apiKey,
+		SubscriptionStart: &start,
+		SubscriptionEnd:   &end,
+		DailyQuota:        dailyQuota,
+	}
+	return user
+}
+
+func seedToken(t *testing.T, id int, name string, remainQuota int) {
+	t.Helper()
+	require.NoError(t, model.DB.Create(&model.Token{
+		Id:                 id,
+		UserId:             id,
+		Key:                fmt.Sprintf("sk-test-%d", id),
+		Status:             common.TokenStatusEnabled,
+		Name:               name,
+		RemainQuota:        remainQuota,
+		UnlimitedQuota:     false,
+		CreatedTime:        time.Now().Unix(),
+		AccessedTime:       time.Now().Unix(),
+		ExpiredTime:        -1,
+		ModelLimits:        "",
+		ModelLimitsEnabled: false,
 	}).Error)
 }
 
@@ -409,6 +576,12 @@ func stubWeeklyMultiplier(m int) func() {
 	old := weeklyQuotaMultiplierFn
 	weeklyQuotaMultiplierFn = func() int { return m }
 	return func() { weeklyQuotaMultiplierFn = old }
+}
+
+func stubWeeklyResetAt(ts int64) func() {
+	old := weeklyQuotaResetAtFn
+	weeklyQuotaResetAtFn = func() int64 { return ts }
+	return func() { weeklyQuotaResetAtFn = old }
 }
 
 func bjTime(year int, month time.Month, day, hour, minute, second int) time.Time {

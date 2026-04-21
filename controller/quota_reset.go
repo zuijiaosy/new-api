@@ -55,6 +55,38 @@ func TriggerQuotaReset(c *gin.Context) {
 	})
 }
 
+// TriggerWeeklyQuotaReset 手动触发周额度重置
+func TriggerWeeklyQuotaReset(c *gin.Context) {
+	if !quota_reset.IsCodexzhDBConnected() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"message": "codexzh 数据库未连接，无法执行周额度重置",
+		})
+		return
+	}
+
+	if !quota_reset.IsWeeklyQuotaLimitEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "周额度限制未启用，无法执行周额度重置",
+		})
+		return
+	}
+
+	if !quota_reset.TryStartManualWeeklyQuotaReset() {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": "额度重置任务正在执行中，请稍后再试",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "周额度重置任务已触发，请稍后查看执行日志",
+	})
+}
+
 // GetQuotaResetStatus 获取额度重置状态
 func GetQuotaResetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
@@ -65,6 +97,7 @@ func GetQuotaResetStatus(c *gin.Context) {
 			"db_connected":         quota_reset.IsCodexzhDBConnected(),
 			"enabled":              quota_reset.IsQuotaResetEnabled(),
 			"weekly_limit_enabled": quota_reset.IsWeeklyQuotaLimitEnabled(),
+			"last_weekly_reset_at": quota_reset.GetWeeklyQuotaResetAt(),
 			"reset_time":           quota_reset.GetQuotaResetTime(),
 			"concurrency":          quota_reset.GetQuotaResetConcurrency(),
 		},

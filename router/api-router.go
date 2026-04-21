@@ -361,6 +361,7 @@ func SetApiRouter(router *gin.Engine) {
 			quotaResetRoute.GET("/logs", controller.GetQuotaResetLogs)
 			quotaResetRoute.GET("/status", controller.GetQuotaResetStatus)
 			quotaResetRoute.POST("/trigger", controller.TriggerQuotaReset)
+			quotaResetRoute.POST("/weekly-reset", controller.TriggerWeeklyQuotaReset)
 		}
 
 		// Deployments (model deployment management)

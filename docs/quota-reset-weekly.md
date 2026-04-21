@@ -24,6 +24,7 @@
 
 - **自动**：`StartQuotaResetScheduler()` 在进程启动时后台运行，每天北京时间 `QuotaResetTime`（默认 `00:01`）触发
 - **手动**：管理后台 `/console/setting?tab=quotareset` 页面点击触发，调用 `TryStartQuotaReset()`
+- **手动周重置**：管理后台 `/console/setting?tab=quotareset` 页面点击“重置周额度”，调用 `TryStartManualWeeklyQuotaReset()`
 
 ### 核心流程
 
@@ -34,9 +35,9 @@ StartQuotaResetScheduler()
             ├─ 1. BatchUpdateNow()（若启用批量落库，先把增量写入DB）
             ├─ 2. GetActiveUsers()（codexzh DB：apiKey IS NOT NULL AND subscriptionEnd > now）
             ├─ 3. 并发处理每个用户（信号量控制，默认3，最大10）
-            │    └─ processUser(user, weeklyLimitEnabled)
+            │    └─ processUser(user, dailyResetEnabled, weeklyLimitEnabled)
             │         ├─ IsDayPass() → 天卡用户（订阅时长≤48h）跳过
-            │         ├─ calculateTodayQuota() → 计算今日额度
+            │         ├─ calculateQuotaForReset() → 按当前模式计算目标额度
             │         └─ updateTokenRemainQuota() → 写 MySQL token + Redis
             └─ 4. 记录执行日志（内存，最多100条）
 ```
@@ -50,6 +51,7 @@ StartQuotaResetScheduler()
 | `QuotaResetConcurrency` | `3` | 并发处理用户数（1~10） |
 | `WeeklyQuotaLimitEnabled` | `false` | 周额度限制开关 |
 | `WeeklyQuotaMultiplier` | `3` | 周额度倍数（weeklyQuota = dailyQuota × N） |
+| `WeeklyQuotaResetAt` | `0` | 最近一次手动周额度重置时间戳，用于重新划定本周统计起点 |
 
 ---
 
@@ -66,6 +68,20 @@ todayQuota   = min(dailyQuota, weeklyQuota - weeklyUsed)
 
 > **重要**：不再使用 `codexzh.users.weeklyQuota` 字段，该字段保留但废弃。
 
+### 重置模式
+
+| 日额度重置 | 周额度限制 | 定时任务行为 |
+|------------|------------|--------------|
+| 开 | 关 | 每次重置为 `dailyQuota` |
+| 开 | 开 | 每次重置为 `min(dailyQuota, weeklyQuota - weeklyUsed)` |
+| 关 | 开 | 每次重置为 `max(weeklyQuota - weeklyUsed, 0)` |
+| 关 | 关 | 定时任务跳过 |
+
+### 手动按钮行为
+
+- **“手动触发执行”**：读取当前真实开关，执行与定时任务同一套模式矩阵；两个开关都关闭时按钮调用会被拒绝（返回 409 或不启动任务）。
+- **“重置周额度”**：要求 `WeeklyQuotaLimitEnabled=true`，否则前端禁用且后端拒绝。触发后会把 `WeeklyQuotaResetAt` 更新为当前时间，并立即按 `max(weeklyQuota - weeklyUsed, 0)` 公式重算所有活跃用户额度；不删除 `logs` 消费日志。
+
 ---
 
 ### 统计窗口起点（considerStart）确定逻辑
@@ -73,17 +89,19 @@ todayQuota   = min(dailyQuota, weeklyQuota - weeklyUsed)
 三级优先级，全部基于北京时间：
 
 ```
+基础起点先取 `max(本周一00:00, WeeklyQuotaResetAt)`，再按以下优先级向后调整：
+
 1. 查 codexzh.payment_orders：
    WHERE userId=? AND orderType='subscription' AND status='PAID'
-   AND paidAt >= 本周一00:00 AND paidAt <= now
+   AND paidAt >= 基础起点 AND paidAt <= now
    → 取最早的 paidAt（精确时刻）
 
 2. 找不到 → 查 codexzh.activation_codes：
    WHERE userId=? AND status='used'
-   AND usedAt >= 本周一00:00 AND usedAt <= now
+   AND usedAt >= 基础起点 AND usedAt <= now
    → 取最早的 usedAt（精确时刻）
 
-3. 两个都没有 → considerStart = 本周一 00:00（北京时间）
+3. 两个都没有 → considerStart = 基础起点（北京时间）
 ```
 
 **关键说明**：

@@ -26,6 +26,7 @@ export default function SettingsQuotaReset(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
+  const [weeklyResetLoading, setWeeklyResetLoading] = useState(false);
   const [inputs, setInputs] = useState({
     QuotaResetEnabled: false,
     WeeklyQuotaLimitEnabled: false,
@@ -96,6 +97,35 @@ export default function SettingsQuotaReset(props) {
     });
   }
 
+  // 手动重置周额度
+  async function handleWeeklyReset() {
+    Modal.confirm({
+      title: t('确认重置周额度'),
+      content: t(
+        '确定要立即重置所有活跃用户的周额度吗？这会将本周统计起点更新为当前时间，并按套餐周额度重新计算当前可用额度。'
+      ),
+      onOk: async () => {
+        setWeeklyResetLoading(true);
+        try {
+          const res = await API.post('/api/quota-reset/weekly-reset');
+          const { success, message } = res.data;
+          if (success) {
+            showSuccess(t('周额度重置任务已触发，请稍后刷新查看执行结果'));
+            setTimeout(() => {
+              props.refresh();
+            }, 2000);
+          } else {
+            showError(message || t('触发失败'));
+          }
+        } catch (error) {
+          showError(t('触发失败'));
+        } finally {
+          setWeeklyResetLoading(false);
+        }
+      },
+    });
+  }
+
   // 日志表格列定义
   const logColumns = [
     {
@@ -107,6 +137,19 @@ export default function SettingsQuotaReset(props) {
         const date = new Date(text);
         return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
       },
+    },
+    {
+      title: t('类型'),
+      dataIndex: 'reset_type',
+      key: 'reset_type',
+      render: (text) =>
+        text === 'manual_weekly_reset' ? (
+          <Tag color='orange'>{t('手动周额度重置')}</Tag>
+        ) : text === 'manual_daily_reset' ? (
+          <Tag color='green'>{t('手动额度重置')}</Tag>
+        ) : (
+          <Tag color='blue'>{t('定时额度重置')}</Tag>
+        ),
     },
     {
       title: t('总用户数'),
@@ -195,6 +238,14 @@ export default function SettingsQuotaReset(props) {
             </Text>
             <Text style={{ marginLeft: 16 }}>
               {t('重置时间')}: {props.status.reset_time || '00:01'}
+            </Text>
+            <Text style={{ marginLeft: 16 }}>
+              {t('最近周额度重置')}: {' '}
+              {props.status.last_weekly_reset_at
+                ? new Date(props.status.last_weekly_reset_at * 1000).toLocaleString('zh-CN', {
+                    timeZone: 'Asia/Shanghai',
+                  })
+                : t('未执行')}
             </Text>
           </div>
         }
@@ -295,6 +346,20 @@ export default function SettingsQuotaReset(props) {
               disabled={!props.status?.db_connected || props.status?.is_running}
             >
               {t('手动触发执行')}
+            </Button>
+            <Button
+              size='default'
+              type='warning'
+              onClick={handleWeeklyReset}
+              loading={weeklyResetLoading}
+              disabled={
+                !props.status?.db_connected ||
+                props.status?.is_running ||
+                !props.status?.weekly_limit_enabled
+              }
+              style={{ marginLeft: 8 }}
+            >
+              {t('重置周额度')}
             </Button>
             <Button
               size='default'
