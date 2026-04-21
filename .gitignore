@@ -37,3 +37,5 @@ mysql_data
 .gopath
 .omx
 .omx/
+.omc
+.omc/
