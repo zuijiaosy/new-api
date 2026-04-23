@@ -12,8 +12,10 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/oss"
 
 	"github.com/QuantumNous/new-api/types"
 
@@ -564,6 +566,25 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
+	}
+
+	// OSS 图片转存：仅对 image generations / edits 生效，其他模式零开销
+	if info.RelayMode == relayconstant.RelayModeImagesGenerations ||
+		info.RelayMode == relayconstant.RelayModeImagesEdits {
+		if interceptor := oss.NewImageURLInterceptor(); interceptor != nil {
+			newBody, changed, ossErr := interceptor.Intercept(c.Request.Context(), responseBody, &oss.RelayMeta{
+				UserId:    info.UserId,
+				ChannelId: info.ChannelId,
+				TokenId:   info.TokenId,
+				ModelName: info.UpstreamModelName,
+			})
+			if ossErr != nil {
+				return nil, types.NewOpenAIError(ossErr, types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+			}
+			if changed {
+				responseBody = newBody
+			}
+		}
 	}
 
 	var usageResp dto.SimpleResponse
