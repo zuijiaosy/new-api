@@ -35,6 +35,7 @@ import {
   RefreshCw,
   Server,
   Activity,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 import SystemSetting from '../../components/settings/SystemSetting';
@@ -51,6 +52,7 @@ import PaymentSetting from '../../components/settings/PaymentSetting';
 import QuotaResetSetting from '../../components/settings/QuotaResetSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
 import PerformanceSetting from '../../components/settings/PerformanceSetting';
+import ImageOssSetting from '../../components/settings/ImageOssSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
@@ -169,6 +171,16 @@ const Setting = () => {
       ),
       content: <PerformanceSetting />,
       itemKey: 'performance',
+    });
+    panes.push({
+      tab: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <ImageIcon size={18} />
+          {t('图片 OSS')}
+        </span>
+      ),
+      content: <ImageOssSetting />,
+      itemKey: 'image-oss',
     });
     panes.push({
       tab: (
