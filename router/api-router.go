@@ -164,6 +164,14 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", controller.AdminDeleteUserSubscription)
 		}
 
+		// OSS 图片转存管理路由（管理员）
+		ossImageAdminRoute := apiRouter.Group("/oss/images")
+		ossImageAdminRoute.Use(middleware.AdminAuth())
+		{
+			ossImageAdminRoute.POST("/ping", controller.PingOssImage)
+			ossImageAdminRoute.POST("/cleanup", controller.CleanupOssImages)
+		}
+
 		// Subscription payment callbacks (no auth)
 		apiRouter.POST("/subscription/epay/notify", controller.SubscriptionEpayNotify)
 		apiRouter.GET("/subscription/epay/notify", controller.SubscriptionEpayNotify)
