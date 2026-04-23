@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -110,6 +112,7 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 	}
 	results := make([]result, len(tasks))
 
+	strict := !i.cfg.FallbackToUpstream
 	eg, gctx := errgroup.WithContext(ctx)
 	for i2, tk := range tasks {
 		eg.Go(func() error {
@@ -118,6 +121,9 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 			if err != nil {
 				res.err = fmt.Errorf("%w: %v", ErrUpstreamDownload, err)
 				results[i2] = res
+				if strict {
+					return res.err
+				}
 				return nil
 			}
 			key := buildObjectKey(mimeType)
@@ -125,6 +131,9 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 			if err != nil {
 				res.err = fmt.Errorf("%w: %v", ErrStorageUpload, err)
 				results[i2] = res
+				if strict {
+					return res.err
+				}
 				return nil
 			}
 			res.fileKey = key
@@ -135,13 +144,30 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 			return nil
 		})
 	}
-	_ = eg.Wait()
+	waitErr := eg.Wait()
 
-	if !i.cfg.FallbackToUpstream {
+	if strict {
+		// 严格模式任意失败：把已成功上传的对象回滚删除，避免孤儿。
+		var firstErr error
 		for _, r := range results {
-			if r.err != nil {
-				return nil, false, r.err
+			if r.err != nil && firstErr == nil {
+				firstErr = r.err
 			}
+		}
+		if firstErr == nil {
+			firstErr = waitErr
+		}
+		if firstErr != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			for _, r := range results {
+				if r.err == nil && r.fileKey != "" {
+					if delErr := i.storage.Delete(cleanupCtx, r.fileKey); delErr != nil {
+						common.SysLog(fmt.Sprintf("oss strict rollback delete failed key=%s: %v", r.fileKey, delErr))
+					}
+				}
+			}
+			cancel()
+			return nil, false, firstErr
 		}
 	}
 
@@ -199,6 +225,9 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 }
 
 func downloadImage(ctx context.Context, cli *http.Client, rawUrl string) ([]byte, string, error) {
+	if err := validateUpstreamURL(rawUrl); err != nil {
+		return nil, "", err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawUrl, nil)
 	if err != nil {
 		return nil, "", err
@@ -231,6 +260,42 @@ func downloadImage(ctx context.Context, cli *http.Client, rawUrl string) ([]byte
 		mimeType = mt
 	}
 	return data, mimeType, nil
+}
+
+// validateUpstreamURL 是包级可替换钩子，便于测试注入裸 httptest.Server。
+var validateUpstreamURL = defaultValidateUpstreamURL
+
+// defaultValidateUpstreamURL 防 SSRF：限制 scheme 为 http/https，拒绝指向内网/回环/链路本地 IP 的地址。
+func defaultValidateUpstreamURL(rawUrl string) error {
+	u, err := url.Parse(rawUrl)
+	if err != nil {
+		return fmt.Errorf("invalid url: %v", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("unsupported url scheme: %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("upstream url missing host")
+	}
+	// 若 host 直接是 IP 字面量，直接校验；否则解析 DNS。
+	var ips []net.IP
+	if ip := net.ParseIP(host); ip != nil {
+		ips = []net.IP{ip}
+	} else {
+		addrs, resolveErr := net.LookupIP(host)
+		if resolveErr != nil {
+			return fmt.Errorf("dns resolve failed: %v", resolveErr)
+		}
+		ips = addrs
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("upstream url resolves to disallowed ip: %s", ip.String())
+		}
+	}
+	return nil
 }
 
 func buildObjectKey(mimeType string) string {

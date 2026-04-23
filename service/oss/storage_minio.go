@@ -25,11 +25,17 @@ func newMinioStorage(cfg oss_setting.OssImageSetting) (Storage, error) {
 	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
 		endpoint = u.Host
 	}
-	cli, err := minio.New(endpoint, &minio.Options{
+	opts := &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
 		Region: cfg.Region,
-	})
+	}
+	if cfg.UsePathStyle {
+		opts.BucketLookup = minio.BucketLookupPath
+	} else {
+		opts.BucketLookup = minio.BucketLookupDNS
+	}
+	cli, err := minio.New(endpoint, opts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrStorageNotConfigured, err)
 	}

@@ -168,6 +168,11 @@ func TestInterceptConcurrent(t *testing.T) {
 	}
 }
 
+func init() {
+	// 测试使用 httptest 的 127.0.0.1 环回地址；禁用 SSRF 校验。
+	validateUpstreamURL = func(string) error { return nil }
+}
+
 func enabledCfg() oss_setting.OssImageSetting {
 	return oss_setting.OssImageSetting{
 		Enabled:                true,

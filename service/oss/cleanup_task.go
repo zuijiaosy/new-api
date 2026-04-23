@@ -108,10 +108,10 @@ func RunOssImageCleanupOnce(ctx context.Context) (CleanupReport, error) {
 		report.Scanned += len(imgs)
 
 		keys := make([]string, 0, len(imgs))
-		ids := make([]int64, 0, len(imgs))
+		keyToId := make(map[string]int64, len(imgs))
 		for _, im := range imgs {
 			keys = append(keys, im.FileKey)
-			ids = append(ids, im.Id)
+			keyToId[im.FileKey] = im.Id
 		}
 		_, failed, delErr := storage.BatchDelete(ctx, keys)
 		if delErr != nil {
@@ -122,11 +122,25 @@ func RunOssImageCleanupOnce(ctx context.Context) (CleanupReport, error) {
 		}
 		report.Failed += len(failed)
 
-		if _, err := model.DeleteOssImagesByIds(ids); err != nil {
-			common.SysError(fmt.Sprintf("oss db delete failed: %v", err))
-			break
+		// 仅删除 OSS 侧已成功删除的 key 对应的 DB 行，失败的 key 下次再来。
+		failedSet := make(map[string]struct{}, len(failed))
+		for _, k := range failed {
+			failedSet[k] = struct{}{}
 		}
-		report.Deleted += len(imgs) - len(failed)
+		successIds := make([]int64, 0, len(imgs)-len(failed))
+		for key, id := range keyToId {
+			if _, bad := failedSet[key]; bad {
+				continue
+			}
+			successIds = append(successIds, id)
+		}
+		if len(successIds) > 0 {
+			if _, err := model.DeleteOssImagesByIds(successIds); err != nil {
+				common.SysError(fmt.Sprintf("oss db delete failed: %v", err))
+				break
+			}
+		}
+		report.Deleted += len(successIds)
 
 		if len(imgs) < batch {
 			break
