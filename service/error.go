@@ -120,6 +120,9 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 		oaiError := errResponse.TryToOpenAIError()
 		if oaiError != nil {
 			newApiErr = types.WithOpenAIError(*oaiError, resp.StatusCode)
+			if oaiError.Type == "overloaded_error" && resp.StatusCode == http.StatusServiceUnavailable {
+				newApiErr.MarkAsChannelError(types.ErrorCodeChannelOverloaded)
+			}
 			if showBodyWhenFail {
 				newApiErr.Err = buildErrWithBody(newApiErr.Error())
 			}

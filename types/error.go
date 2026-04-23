@@ -59,6 +59,7 @@ const (
 	ErrorCodeChannelAwsClientError        ErrorCode = "channel:aws_client_error"
 	ErrorCodeChannelInvalidKey            ErrorCode = "channel:invalid_key"
 	ErrorCodeChannelResponseTimeExceeded  ErrorCode = "channel:response_time_exceeded"
+	ErrorCodeChannelOverloaded            ErrorCode = "channel:overloaded"
 
 	// client request error
 	ErrorCodeReadRequestBodyFailed ErrorCode = "read_request_body_failed"
@@ -374,6 +375,13 @@ func IsChannelError(err *NewAPIError) bool {
 		return false
 	}
 	return strings.HasPrefix(string(err.errorCode), "channel:")
+}
+
+func (e *NewAPIError) MarkAsChannelError(code ErrorCode) *NewAPIError {
+	if e != nil {
+		e.errorCode = code
+	}
+	return e
 }
 
 func IsSkipRetryError(err *NewAPIError) bool {

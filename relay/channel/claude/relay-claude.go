@@ -370,7 +370,6 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 				claudeMediaMessages := make([]dto.ClaudeMediaMessage, 0)
 				for _, mediaMessage := range message.ParseContent() {
 					if mediaMessage.Type == "text" {
-						// 合并上游修复：跳过空字符串内容，避免向上游发送空字段
 						if mediaMessage.Text == "" {
 							continue
 						}
@@ -740,7 +739,11 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		return types.NewError(err, types.ErrorCodeBadResponseBody)
 	}
 	if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
-		return types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+		apiErr := types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+		if claudeError.Type == "overloaded_error" {
+			apiErr.MarkAsChannelError(types.ErrorCodeChannelOverloaded)
+		}
+		return apiErr
 	}
 	if claudeResponse.StopReason != "" {
 		maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
