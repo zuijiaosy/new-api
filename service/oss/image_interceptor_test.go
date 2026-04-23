@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/oss_setting"
 )
@@ -99,6 +101,13 @@ func TestInterceptSingleSuccess(t *testing.T) {
 	if bytes.Contains(out, []byte(srv.URL)) {
 		t.Fatalf("upstream url should be replaced")
 	}
+	var parsed dto.ImageResponse
+	if err := common.Unmarshal(out, &parsed); err != nil {
+		t.Fatalf("unmarshal out: %v", err)
+	}
+	if len(parsed.Data) != 1 || !strings.HasPrefix(parsed.Data[0].Url, "https://cdn.example.com/") {
+		t.Fatalf("replaced url should point to CDN: %+v", parsed.Data)
+	}
 }
 
 func TestInterceptStrictDownload404(t *testing.T) {
@@ -171,6 +180,3 @@ func enabledCfg() oss_setting.OssImageSetting {
 		DownloadTimeoutSeconds: 5,
 	}
 }
-
-// 辅助：让测试能够 import common（否则未使用）
-var _ = common.Marshal

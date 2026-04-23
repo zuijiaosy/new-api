@@ -24,7 +24,6 @@ import (
 
 // RelayMeta 是拦截器需要的请求上下文元数据切片，避免引入 relay 包循环依赖。
 type RelayMeta struct {
-	Ctx       context.Context
 	UserId    int
 	ChannelId int
 	TokenId   int
@@ -113,7 +112,6 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 
 	eg, gctx := errgroup.WithContext(ctx)
 	for i2, tk := range tasks {
-		i2, tk := i2, tk
 		eg.Go(func() error {
 			res := result{idx: tk.idx, upstreamUrl: tk.url}
 			payload, mimeType, err := downloadImage(gctx, httpClient, tk.url)
@@ -169,7 +167,12 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 			if !i.cfg.FallbackToUpstream {
 				return nil, false, fmt.Errorf("%w: %v", ErrStoragePersist, err)
 			}
-			common.SysLog(fmt.Sprintf("oss persist failed (fallback mode): %v", err))
+			// 降级模式下 OSS 对象已上传但 DB 记录缺失，列出 fileKey 便于后续人工/巡检清理孤儿对象。
+			orphanKeys := make([]string, 0, len(persistBatch))
+			for _, p := range persistBatch {
+				orphanKeys = append(orphanKeys, p.FileKey)
+			}
+			common.SysLog(fmt.Sprintf("oss persist failed (fallback mode): %v; orphan keys=%v", err, orphanKeys))
 			return body, false, nil
 		}
 	}
@@ -208,21 +211,17 @@ func downloadImage(ctx context.Context, cli *http.Client, rawUrl string) ([]byte
 	if resp.StatusCode >= 400 {
 		return nil, "", errors.New("upstream http " + resp.Status)
 	}
+	// constant.MaxFileDownloadMB 为包级 var，若未初始化则兜底 32MB，避免无限读取。
 	maxBytes := int64(constant.MaxFileDownloadMB) * 1024 * 1024
-	var data []byte
-	if maxBytes > 0 {
-		data, err = io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
-		if err != nil {
-			return nil, "", err
-		}
-		if int64(len(data)) > maxBytes {
-			return nil, "", fmt.Errorf("image exceeds max %dMB", constant.MaxFileDownloadMB)
-		}
-	} else {
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, "", err
-		}
+	if maxBytes <= 0 {
+		maxBytes = 32 * 1024 * 1024
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, "", fmt.Errorf("image exceeds max %d bytes", maxBytes)
 	}
 	mimeType := resp.Header.Get("Content-Type")
 	if mimeType == "" {
