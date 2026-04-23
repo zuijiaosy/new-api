@@ -2,7 +2,6 @@ package oss_setting
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/QuantumNous/new-api/setting/config"
 )
@@ -27,30 +26,26 @@ type OssImageSetting struct {
 	CleanupBatchSize       int `json:"cleanup_batch_size"`
 }
 
-var (
-	ossImageSetting = OssImageSetting{
-		Enabled:                false,
-		FallbackToUpstream:     false,
-		Bucket:                 "new-api-images",
-		Region:                 "us-east-1",
-		UseSSL:                 false,
-		UsePathStyle:           true,
-		RetentionHours:         24,
-		DownloadTimeoutSeconds: 30,
-		CleanupIntervalHours:   24,
-		CleanupBatchSize:       500,
-	}
-	ossImageSettingMu sync.RWMutex
-)
+var ossImageSetting = OssImageSetting{
+	Enabled:                false,
+	FallbackToUpstream:     false,
+	Bucket:                 "new-api-images",
+	Region:                 "us-east-1",
+	UseSSL:                 false,
+	UsePathStyle:           true,
+	RetentionHours:         24,
+	DownloadTimeoutSeconds: 30,
+	CleanupIntervalHours:   24,
+	CleanupBatchSize:       500,
+}
 
 func init() {
 	config.GlobalConfig.Register("oss_image_setting", &ossImageSetting)
 }
 
-// GetOssImageSetting 返回当前配置的拷贝，调用方只读。
+// GetOssImageSetting 返回当前配置的快照（值拷贝），调用方修改不影响全局配置。
+// 写入路径由 config.GlobalConfig 统一加锁，与 performance_setting 等包保持一致。
 func GetOssImageSetting() OssImageSetting {
-	ossImageSettingMu.RLock()
-	defer ossImageSettingMu.RUnlock()
 	return ossImageSetting
 }
 
