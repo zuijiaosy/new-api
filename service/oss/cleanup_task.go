@@ -108,10 +108,8 @@ func RunOssImageCleanupOnce(ctx context.Context) (CleanupReport, error) {
 		report.Scanned += len(imgs)
 
 		keys := make([]string, 0, len(imgs))
-		keyToId := make(map[string]int64, len(imgs))
 		for _, im := range imgs {
 			keys = append(keys, im.FileKey)
-			keyToId[im.FileKey] = im.Id
 		}
 		_, failed, delErr := storage.BatchDelete(ctx, keys)
 		if delErr != nil {
@@ -128,11 +126,11 @@ func RunOssImageCleanupOnce(ctx context.Context) (CleanupReport, error) {
 			failedSet[k] = struct{}{}
 		}
 		successIds := make([]int64, 0, len(imgs)-len(failed))
-		for key, id := range keyToId {
-			if _, bad := failedSet[key]; bad {
+		for _, im := range imgs {
+			if _, bad := failedSet[im.FileKey]; bad {
 				continue
 			}
-			successIds = append(successIds, id)
+			successIds = append(successIds, im.Id)
 		}
 		if len(successIds) > 0 {
 			if _, err := model.DeleteOssImagesByIds(successIds); err != nil {
