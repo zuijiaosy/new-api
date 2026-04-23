@@ -147,7 +147,7 @@ const ImageOssSetting = () => {
         </Typography.Title>
         <Form.Input
           field='endpoint'
-          label='Endpoint'
+          label={t('Endpoint')}
           placeholder='127.0.0.1:9000'
         />
         <Form.Input field='access_key' label='AccessKey' />
