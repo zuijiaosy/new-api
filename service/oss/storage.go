@@ -41,6 +41,11 @@ func BumpStorageVersion() {
 	versionCnt.Add(1)
 }
 
+func init() {
+	// 订阅配置变更：option 落盘后 Bump 缓存版本，下一次 GetStorage 重建客户端。
+	oss_setting.RegisterConfigChangeHandler(BumpStorageVersion)
+}
+
 // GetStorage 返回当前配置对应的 Storage 实例。
 // 若配置不足或未注册 builder，返回 ErrStorageNotConfigured。
 // 实例按 versionCnt 缓存；版本号变更后下一次调用重建，正在使用旧实例的调用者不受影响。

@@ -2,6 +2,7 @@ package oss_setting
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/setting/config"
 )
@@ -72,4 +73,31 @@ func MaskSecret(secret string) string {
 func (s OssImageSetting) IsConfigured() bool {
 	return s.Endpoint != "" && s.AccessKey != "" && s.SecretKey != "" &&
 		s.Bucket != "" && s.PublicUrlPrefix != ""
+}
+
+var (
+	handlerMu       sync.RWMutex
+	changeHandlers  []func()
+)
+
+// RegisterConfigChangeHandler 订阅 oss_image_setting 变更事件。
+// 由 service/oss 在 init() 中注册 BumpStorageVersion，避免 setting 包反向依赖 service。
+func RegisterConfigChangeHandler(h func()) {
+	if h == nil {
+		return
+	}
+	handlerMu.Lock()
+	changeHandlers = append(changeHandlers, h)
+	handlerMu.Unlock()
+}
+
+// NotifyConfigChanged 由 model/option.go 在配置落盘后调用，广播到所有订阅者。
+func NotifyConfigChanged() {
+	handlerMu.RLock()
+	hs := make([]func(), len(changeHandlers))
+	copy(hs, changeHandlers)
+	handlerMu.RUnlock()
+	for _, h := range hs {
+		h()
+	}
 }
