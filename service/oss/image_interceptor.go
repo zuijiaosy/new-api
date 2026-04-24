@@ -99,7 +99,16 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	httpClient := &http.Client{Timeout: timeout}
+	// CheckRedirect 对每次跳转目标都重新执行 SSRF 校验，避免攻击者用公网 302 跳转到内网地址绕过首跳校验。
+	httpClient := &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("stopped after 5 redirects")
+			}
+			return validateUpstreamURL(req.URL.String())
+		},
+	}
 
 	type result struct {
 		idx         int
@@ -114,6 +123,8 @@ func (i *ImageURLInterceptor) Intercept(ctx context.Context, body []byte, meta *
 
 	strict := !i.cfg.FallbackToUpstream
 	eg, gctx := errgroup.WithContext(ctx)
+	// 限制并发避免单请求多图场景下内存峰值失控（如 DALL-E 一次返回 10 图 * 32MB = 320MB/请求）。
+	eg.SetLimit(4)
 	for i2, tk := range tasks {
 		eg.Go(func() error {
 			res := result{idx: tk.idx, upstreamUrl: tk.url}
