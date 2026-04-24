@@ -17,7 +17,10 @@ func IsGPT54TieredPricingModel(modelName string) bool {
 }
 
 func ApplyPromptTokenPricingOverrides(modelName string, inputTokens int, priceData *types.PriceData) bool {
-	return applyGPT54TieredPricing(modelName, inputTokens, priceData)
+	if applyGPT54TieredPricing(modelName, inputTokens, priceData) {
+		return true
+	}
+	return applyGPT55TieredPricing(modelName, inputTokens, priceData)
 }
 
 func applyGPT54TieredPricing(modelName string, inputTokens int, priceData *types.PriceData) bool {

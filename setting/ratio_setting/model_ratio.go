@@ -95,6 +95,7 @@ var defaultModelRatio = map[string]float64{
 	"gpt-5-2025-08-07":                 0.625,
 	"gpt-5-chat-latest":                0.625,
 	"gpt-5.4":                          1.25, // $2.50 / 1M input tokens
+	"gpt-5.5":                          1.25, // $2.50 / 1M input tokens (short-context tier; see gpt_5_5_tiered_pricing.go)
 	"gpt-5-mini":                       0.125,
 	"gpt-5-mini-2025-08-07":            0.125,
 	"gpt-5-nano":                       0.025,
@@ -522,6 +523,12 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 			if strings.HasPrefix(name, "gpt-5.4-") {
 				return 0, false
 			}
+			if name == "gpt-5.5" {
+				return 6, true
+			}
+			if strings.HasPrefix(name, "gpt-5.5-") {
+				return 0, false
+			}
 			return 8, true
 		}
 		// gpt-4.5-preview匹配
@@ -728,6 +735,11 @@ func FormatMatchingModelName(name string) string {
 		!strings.HasPrefix(name, "gpt-5.4-pro") &&
 		!strings.HasPrefix(name, "gpt-5.4-mini") {
 		name = "gpt-5.4"
+	}
+	if strings.HasPrefix(name, "gpt-5.5-") &&
+		!strings.HasPrefix(name, "gpt-5.5-pro") &&
+		!strings.HasPrefix(name, "gpt-5.5-mini") {
+		name = "gpt-5.5"
 	}
 	return name
 }
