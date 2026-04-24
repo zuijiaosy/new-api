@@ -5,11 +5,11 @@ import "github.com/QuantumNous/new-api/types"
 const (
 	GPT55TieredPricingModelName      = "gpt-5.5"
 	GPT55TieredPricingThreshold      = 272000
-	gpt55ShortContextModelRatio      = 1.25
-	gpt55LongContextModelRatio       = 2.5
+	gpt55ShortContextModelRatio      = 2.5 // $5.00 / 1M input tokens
+	gpt55LongContextModelRatio       = 5.0 // $10.00 / 1M input tokens
 	gpt55TieredPricingCacheRatio     = 0.1
-	gpt55ShortContextCompletionRatio = 6.0
-	gpt55LongContextCompletionRatio  = 4.5
+	gpt55ShortContextCompletionRatio = 6.0 // 输出 $30.00 / 1M（$5 * 6）
+	gpt55LongContextCompletionRatio  = 4.5 // 输出 $45.00 / 1M（$10 * 4.5）
 )
 
 func IsGPT55TieredPricingModel(modelName string) bool {

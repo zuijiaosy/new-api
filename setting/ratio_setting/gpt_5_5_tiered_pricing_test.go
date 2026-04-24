@@ -8,7 +8,7 @@ import (
 
 func TestApplyTieredPricingForGPT55ShortContext(t *testing.T) {
 	priceData := &types.PriceData{
-		ModelRatio:      1.25,
+		ModelRatio:      2.5,
 		CompletionRatio: 6,
 		CacheRatio:      0.1,
 	}
@@ -17,8 +17,8 @@ func TestApplyTieredPricingForGPT55ShortContext(t *testing.T) {
 	if !applied {
 		t.Fatal("expected tiered pricing to be applied")
 	}
-	if priceData.ModelRatio != 1.25 {
-		t.Fatalf("expected short-context model ratio 1.25, got %v", priceData.ModelRatio)
+	if priceData.ModelRatio != 2.5 {
+		t.Fatalf("expected short-context model ratio 2.5, got %v", priceData.ModelRatio)
 	}
 	if priceData.CompletionRatio != 6 {
 		t.Fatalf("expected short-context completion ratio 6, got %v", priceData.CompletionRatio)
@@ -42,7 +42,7 @@ func TestApplyTieredPricingForGPT55ShortContext(t *testing.T) {
 
 func TestApplyTieredPricingForGPT55LongContext(t *testing.T) {
 	priceData := &types.PriceData{
-		ModelRatio:      1.25,
+		ModelRatio:      2.5,
 		CompletionRatio: 6,
 		CacheRatio:      0.1,
 	}
@@ -51,8 +51,8 @@ func TestApplyTieredPricingForGPT55LongContext(t *testing.T) {
 	if !applied {
 		t.Fatal("expected tiered pricing to be applied")
 	}
-	if priceData.ModelRatio != 2.5 {
-		t.Fatalf("expected long-context model ratio 2.5, got %v", priceData.ModelRatio)
+	if priceData.ModelRatio != 5.0 {
+		t.Fatalf("expected long-context model ratio 5.0, got %v", priceData.ModelRatio)
 	}
 	if priceData.CompletionRatio != 4.5 {
 		t.Fatalf("expected long-context completion ratio 4.5, got %v", priceData.CompletionRatio)
@@ -67,7 +67,7 @@ func TestApplyTieredPricingForGPT55LongContext(t *testing.T) {
 
 func TestApplyTieredPricingDoesNotApplyForGPT55SnapshotModel(t *testing.T) {
 	priceData := &types.PriceData{
-		ModelRatio:      1.25,
+		ModelRatio:      2.5,
 		CompletionRatio: 6,
 		CacheRatio:      0.1,
 	}
@@ -76,7 +76,7 @@ func TestApplyTieredPricingDoesNotApplyForGPT55SnapshotModel(t *testing.T) {
 	if applied {
 		t.Fatal("expected tiered pricing not to be applied for snapshot model")
 	}
-	if priceData.ModelRatio != 1.25 {
+	if priceData.ModelRatio != 2.5 {
 		t.Fatalf("expected snapshot model ratio unchanged, got %v", priceData.ModelRatio)
 	}
 	if priceData.CompletionRatio != 6 {
