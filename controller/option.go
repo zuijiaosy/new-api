@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/oss_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -25,6 +26,16 @@ var completionRatioMetaOptionKeys = []string{
 	"ImageRatio",
 	"AudioRatio",
 	"AudioCompletionRatio",
+}
+
+// maskedOptionValue 对部分需要在前端显示“已配置但脱敏”的敏感键返回掩码值。
+// ok=false 表示不需要暴露该键；ok=true 时返回脱敏值。
+func maskedOptionValue(key, value string) (string, bool) {
+	switch key {
+	case "oss_image_setting.secret_key":
+		return oss_setting.MaskSecret(value), true
+	}
+	return "", false
 }
 
 func isVisiblePublicKeyOption(key string) bool {
@@ -79,8 +90,15 @@ func GetOptions(c *gin.Context) {
 			strings.HasSuffix(k, "Secret") ||
 			strings.HasSuffix(k, "Key") ||
 			strings.HasSuffix(k, "secret") ||
-			strings.HasSuffix(k, "api_key")
+			strings.HasSuffix(k, "api_key") ||
+			strings.HasSuffix(k, ".secret_key") ||
+			strings.HasSuffix(k, "_secret")
 		if isSensitiveKey && !isVisiblePublicKeyOption(k) {
+			// 分层配置（如 oss_image_setting.secret_key）需要在前端显示 ****last4 占位，
+			// 以便管理员识别“是否已配置”并决定是否保留旧值。其他敏感项维持跳过策略。
+			if masked, ok := maskedOptionValue(k, value); ok {
+				options = append(options, &model.Option{Key: k, Value: masked})
+			}
 			continue
 		}
 		options = append(options, &model.Option{
