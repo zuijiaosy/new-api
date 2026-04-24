@@ -190,7 +190,7 @@ const ImageOssSetting = () => {
 
       <Spin spinning={saving}>
         <Form
-          values={inputs}
+          initValues={inputs}
           getFormApi={(api) => (refForm.current = api)}
         >
           <Typography.Title heading={5}>{t('基础设置')}</Typography.Title>
@@ -199,6 +199,7 @@ const ImageOssSetting = () => {
               <Form.Switch
                 field='oss_image_setting.enabled'
                 label={t('启用图片 OSS 转存')}
+                checked={inputs['oss_image_setting.enabled']}
                 onChange={handleFieldChange('oss_image_setting.enabled')}
               />
             </Col>
@@ -206,6 +207,7 @@ const ImageOssSetting = () => {
               <Form.Switch
                 field='oss_image_setting.fallback_to_upstream'
                 label={t('失败时回退到上游 URL')}
+                checked={inputs['oss_image_setting.fallback_to_upstream']}
                 onChange={handleFieldChange(
                   'oss_image_setting.fallback_to_upstream',
                 )}
@@ -222,6 +224,7 @@ const ImageOssSetting = () => {
                 field='oss_image_setting.endpoint'
                 label={t('Endpoint')}
                 placeholder='127.0.0.1:9000'
+                value={inputs['oss_image_setting.endpoint']}
                 onChange={handleFieldChange('oss_image_setting.endpoint')}
               />
             </Col>
@@ -229,6 +232,7 @@ const ImageOssSetting = () => {
               <Form.Input
                 field='oss_image_setting.access_key'
                 label='AccessKey'
+                value={inputs['oss_image_setting.access_key']}
                 onChange={handleFieldChange('oss_image_setting.access_key')}
               />
             </Col>
@@ -238,6 +242,7 @@ const ImageOssSetting = () => {
                 label='SecretKey'
                 mode='password'
                 placeholder={t('保持默认即沿用已保存值')}
+                value={inputs['oss_image_setting.secret_key']}
                 onChange={handleFieldChange('oss_image_setting.secret_key')}
               />
             </Col>
@@ -245,6 +250,7 @@ const ImageOssSetting = () => {
               <Form.Input
                 field='oss_image_setting.bucket'
                 label='Bucket'
+                value={inputs['oss_image_setting.bucket']}
                 onChange={handleFieldChange('oss_image_setting.bucket')}
               />
             </Col>
@@ -252,6 +258,7 @@ const ImageOssSetting = () => {
               <Form.Input
                 field='oss_image_setting.region'
                 label='Region'
+                value={inputs['oss_image_setting.region']}
                 onChange={handleFieldChange('oss_image_setting.region')}
               />
             </Col>
@@ -260,6 +267,7 @@ const ImageOssSetting = () => {
                 field='oss_image_setting.public_url_prefix'
                 label={t('公网 URL 前缀')}
                 placeholder='https://cdn.example.com'
+                value={inputs['oss_image_setting.public_url_prefix']}
                 onChange={handleFieldChange(
                   'oss_image_setting.public_url_prefix',
                 )}
@@ -269,6 +277,7 @@ const ImageOssSetting = () => {
               <Form.Switch
                 field='oss_image_setting.use_ssl'
                 label='Use SSL'
+                checked={inputs['oss_image_setting.use_ssl']}
                 onChange={handleFieldChange('oss_image_setting.use_ssl')}
               />
             </Col>
@@ -276,6 +285,7 @@ const ImageOssSetting = () => {
               <Form.Switch
                 field='oss_image_setting.use_path_style'
                 label='Path Style'
+                checked={inputs['oss_image_setting.use_path_style']}
                 onChange={handleFieldChange(
                   'oss_image_setting.use_path_style',
                 )}
@@ -300,6 +310,7 @@ const ImageOssSetting = () => {
                 field='oss_image_setting.retention_hours'
                 label={t('保留小时数')}
                 min={1}
+                value={inputs['oss_image_setting.retention_hours']}
                 onChange={handleFieldChange(
                   'oss_image_setting.retention_hours',
                 )}
@@ -310,6 +321,7 @@ const ImageOssSetting = () => {
                 field='oss_image_setting.download_timeout_seconds'
                 label={t('下载超时(秒)')}
                 min={1}
+                value={inputs['oss_image_setting.download_timeout_seconds']}
                 onChange={handleFieldChange(
                   'oss_image_setting.download_timeout_seconds',
                 )}
@@ -323,6 +335,7 @@ const ImageOssSetting = () => {
                 extraText={t(
                   '修改后下次进程启动生效；如需立即生效请使用下方手动清理按钮',
                 )}
+                value={inputs['oss_image_setting.cleanup_interval_hours']}
                 onChange={handleFieldChange(
                   'oss_image_setting.cleanup_interval_hours',
                 )}
@@ -333,6 +346,7 @@ const ImageOssSetting = () => {
                 field='oss_image_setting.cleanup_batch_size'
                 label={t('清理批大小')}
                 min={1}
+                value={inputs['oss_image_setting.cleanup_batch_size']}
                 onChange={handleFieldChange(
                   'oss_image_setting.cleanup_batch_size',
                 )}
