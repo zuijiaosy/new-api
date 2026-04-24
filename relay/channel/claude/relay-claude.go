@@ -838,7 +838,11 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		return types.NewError(err, types.ErrorCodeBadResponseBody)
 	}
 	if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
-		return types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+		apiErr := types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+		if claudeError.Type == "overloaded_error" {
+			apiErr.MarkAsChannelError(types.ErrorCodeChannelOverloaded)
+		}
+		return apiErr
 	}
 	maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
 	if claudeInfo.Usage == nil {

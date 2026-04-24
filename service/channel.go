@@ -52,6 +52,11 @@ func ShouldDisableChannel(channelType int, err *types.NewAPIError) bool {
 		return false
 	}
 	if types.IsChannelError(err) {
+		// 过载（overloaded_error）是上游瞬时压力信号，仅触发重试切换通道，
+		// 不应导致原通道被自动禁用，否则高峰期可能雪崩式禁用多个通道。
+		if err.ToOpenAIError().Code == string(types.ErrorCodeChannelOverloaded) {
+			return false
+		}
 		return true
 	}
 	if types.IsSkipRetryError(err) {
